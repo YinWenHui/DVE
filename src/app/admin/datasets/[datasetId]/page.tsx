@@ -1,0 +1,13 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Database, RefreshCw } from "lucide-react";
+import { getMockStore } from "@/lib/mock-store";
+
+export default async function DatasetDetailPage({ params }: { params: Promise<{ datasetId: string }> }) {
+  const { datasetId } = await params; const store = getMockStore(); const dataset = store.datasets.find((item) => item.id === datasetId); if (!dataset) notFound(); const rows = store.records.get(dataset.id) ?? [];
+  return <><div className="page-heading"><div><p className="eyebrow">Dataset detail</p><h1>{dataset.name}</h1><p>{dataset.description}</p></div><Link className="button primary" href="/admin/refresh"><RefreshCw size={15} /> Open refresh monitor</Link></div>
+    <section className="stat-grid"><div className="stat-card"><span>Active rows</span><strong>{dataset.rowCount.toLocaleString()}</strong><small>Validated version</small></div><div className="stat-card"><span>Fields</span><strong>{dataset.fields.length}</strong><small>Single-table semantic model</small></div><div className="stat-card"><span>Refresh interval</span><strong>{dataset.refreshIntervalMinutes}m</strong><small>Asia/Bangkok schedule</small></div><div className="stat-card"><span>Status</span><strong>{dataset.status}</strong><small>Previous version preserved</small></div></section>
+    <section className="panel"><div className="panel-header"><div><h2>Field metadata</h2><p>Source names are mapped to safe internal keys before querying.</p></div><Database size={20} /></div><table className="admin-table"><thead><tr><th>Source field</th><th>Field key</th><th>Display name</th><th>Data type</th><th>Semantic type</th><th>Aggregation</th><th>Visible</th></tr></thead><tbody>{dataset.fields.map((field) => <tr key={field.id}><td>{field.sourceName}</td><td><code>{field.key}</code></td><td>{field.displayName}</td><td>{field.dataType}</td><td>{field.semanticType}</td><td>{field.defaultAggregation}</td><td>{field.hidden ? "Hidden" : "Visible"}</td></tr>)}</tbody></table></section>
+    <section className="panel"><div className="panel-header"><div><h2>Data preview</h2><p>First five rows from the active validated version.</p></div></div><div className="data-table-wrap"><table className="admin-table"><thead><tr>{dataset.fields.filter((field) => !field.hidden).slice(0, 8).map((field) => <th key={field.id}>{field.displayName}</th>)}</tr></thead><tbody>{rows.slice(0, 5).map((row, index) => <tr key={index}>{dataset.fields.filter((field) => !field.hidden).slice(0, 8).map((field) => <td key={field.id}>{String(row[field.key] ?? "")}</td>)}</tr>)}</tbody></table></div></section>
+  </>;
+}

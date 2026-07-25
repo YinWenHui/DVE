@@ -1,0 +1,6 @@
+{
+  "connection_string_environment_variable": "DVE_SQL_CONNECTION_STRING",
+  "timezone": "Asia/Bangkok",
+  "batch_size": 1000,
+  "maximum_rows": 500000
+}
