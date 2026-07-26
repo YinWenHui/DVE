@@ -101,11 +101,19 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   }
 
   function changeLayout(next: Layout[]) {
-    if (!page) return;
-    updatePage({ ...page, visuals: page.visuals.map((visual) => {
-      const position = next.find((item) => item.i === visual.id);
-      return position ? { ...visual, x: position.x, y: position.y, w: position.w, h: position.h } : visual;
-    }) });
+    setPages((current) => {
+      const currentPage = current[pageIndex];
+      if (!currentPage) return current;
+      let changed = false;
+      const visuals = currentPage.visuals.map((visual) => {
+        const position = next.find((item) => item.i === visual.id);
+        if (!position || (visual.x === position.x && visual.y === position.y && visual.w === position.w && visual.h === position.h)) return visual;
+        changed = true;
+        return { ...visual, x: position.x, y: position.y, w: position.w, h: position.h };
+      });
+      if (!changed) return current;
+      return current.map((item, index) => index === pageIndex ? { ...currentPage, visuals } : item);
+    });
   }
 
   function addPage() {

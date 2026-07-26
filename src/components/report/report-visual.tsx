@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, type CSSProperties, type MouseEvent } from "react";
+import { memo, useCallback, useMemo, type CSSProperties, type MouseEvent } from "react";
 import { Maximize2, TableProperties } from "lucide-react";
 import { EChart } from "./echart";
 import { ProductionMatrix, ProductionTable } from "./data-table";
@@ -20,7 +20,7 @@ interface ReportVisualProps {
   showActions?: boolean;
 }
 
-export function ReportVisual({ visual, rows, activeFilters = {}, onSelect, onFocus, onShowData, showActions = true }: ReportVisualProps) {
+export const ReportVisual = memo(function ReportVisual({ visual, rows, activeFilters = {}, onSelect, onFocus, onShowData, showActions = true }: ReportVisualProps) {
   const scopedRows = useMemo(() => applyReportFilters(rows, visual.filters), [rows, visual.filters]);
   const style = {
     "--visual-accent": visual.display?.accentColor ?? "var(--accent)",
@@ -54,7 +54,7 @@ export function ReportVisual({ visual, rows, activeFilters = {}, onSelect, onFoc
   }
 
   return <ChartVisual visual={visual} rows={scopedRows} onSelect={onSelect} actions={actions} style={style} />;
-}
+});
 
 function VisualHeader({ visual, meta, actions }: { visual: VisualDefinition; meta: string; actions: React.ReactNode }) {
   if (visual.display?.showTitle === false && !actions) return null;

@@ -33,7 +33,7 @@ test("mock administrator opens the seeded application and uses report controls",
   await page.goto("/app/digital-verse-demo/report/dl-report-dc-line");
   await expect(page.getByText("Actual by Line")).toBeVisible();
   await page.goto("/admin/reports/report-1/edit"); await expect(page.getByText("Canvas", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Add Gauge" }).dispatchEvent("click"); await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
+  await page.getByRole("button", { name: "Add Gauge" }).click({ timeout: 10_000 }); await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
   await expect(page.getByText("Format visual")).toBeVisible(); await expect(page.getByText("Show title")).toBeVisible();
   const builderViewport = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
   expect(builderViewport.scrollWidth).toBeLessThanOrEqual(builderViewport.clientWidth + 1);

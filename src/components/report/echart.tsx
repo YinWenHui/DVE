@@ -23,14 +23,22 @@ export function EChart({ option, onSelect }: { option: EChartsOption; onSelect?:
   useEffect(() => {
     if (!ref.current) return;
     const chart = echarts.init(ref.current, undefined, { renderer: "canvas" }); chartRef.current = chart;
-    const resize = () => chart.resize();
+    let resizeFrame = 0; let lastWidth = -1; let lastHeight = -1;
+    const resize = () => {
+      const element = ref.current; if (!element) return;
+      const width = Math.round(element.clientWidth); const height = Math.round(element.clientHeight);
+      if (!width || !height || (width === lastWidth && height === lastHeight)) return;
+      lastWidth = width; lastHeight = height;
+      window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = window.requestAnimationFrame(() => chart.resize({ width, height }));
+    };
     const select = (event: { name?: string | number }) => {
       if (onSelectRef.current && (typeof event.name === "string" || typeof event.name === "number")) onSelectRef.current(String(event.name));
     };
-    const animationFrame = window.requestAnimationFrame(resize);
+    resize();
     const resizeObserver = new ResizeObserver(resize); resizeObserver.observe(ref.current);
     chart.on("click", select);
-    return () => { window.cancelAnimationFrame(animationFrame); resizeObserver.disconnect(); chart.off("click", select); chart.dispose(); chartRef.current = null; };
+    return () => { window.cancelAnimationFrame(resizeFrame); resizeObserver.disconnect(); chart.off("click", select); chart.dispose(); chartRef.current = null; };
   }, []);
 
   useEffect(() => {
