@@ -155,6 +155,49 @@ export interface DrillthroughDefinition {
   keepAllFilters?: boolean;
 }
 
+export interface ReportBookmarkFilters {
+  from?: string;
+  to?: string;
+  Line?: string;
+  Model?: string;
+  Customer?: string;
+  Shift?: string;
+}
+
+export interface ReportBookmarkDefinition {
+  id: string;
+  name: string;
+  pageId: string;
+  filters?: ReportBookmarkFilters;
+}
+
+export type ReportControlType = "button" | "pageNavigator" | "bookmarkNavigator";
+export type ReportActionType = "page" | "bookmark" | "back" | "resetFilters";
+
+export interface ReportActionDefinition {
+  type: ReportActionType;
+  targetId?: string;
+}
+
+export interface ReportControlDisplayOptions {
+  backgroundColor?: string;
+  accentColor?: string;
+  textColor?: string;
+  borderRadius?: number;
+}
+
+export interface ReportControlDefinition {
+  id: string;
+  type: ReportControlType;
+  title: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  action?: ReportActionDefinition;
+  display?: ReportControlDisplayOptions;
+}
+
 export interface ReportPage {
   id: string;
   name: string;
@@ -163,6 +206,7 @@ export interface ReportPage {
   drillthrough?: DrillthroughDefinition;
   filters?: ReportFilterDefinition[];
   visuals: VisualDefinition[];
+  controls?: ReportControlDefinition[];
 }
 
 export interface Report {
@@ -174,6 +218,7 @@ export interface Report {
   status: "draft" | "published" | "archived";
   minimumRole: RoleCode;
   filters?: ReportFilterDefinition[];
+  bookmarks?: ReportBookmarkDefinition[];
   pages: ReportPage[];
 }
 

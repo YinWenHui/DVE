@@ -4,9 +4,10 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import { ArrowLeft, Bookmark, CornerUpRight, Download, Filter, FilterX, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { CommentsPanel } from "./comments-panel";
 import { ReportCanvasState } from "./report-canvas-state";
+import { ReportControl } from "./report-control";
 import { ReportVisual } from "./report-visual";
 import { applyReportFilters, drillthroughTargets, resolveReportCanvasState, visualData, visualHierarchy } from "@/lib/reporting";
-import type { Dataset, ManufacturingRecord, Report, ReportFilterDefinition, ReportPage, VisualDefinition } from "@/types";
+import type { Dataset, ManufacturingRecord, Report, ReportActionDefinition, ReportBookmarkDefinition, ReportFilterDefinition, ReportPage, VisualDefinition } from "@/types";
 
 interface Filters { from: string; to: string; Line: string; Model: string; Customer: string; Shift: string }
 interface PersonalBookmark { id: string; name: string; pageId: string; filters: Filters; drillContext?: ReportFilterDefinition[]; createdAt: string }
@@ -30,6 +31,7 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
   const [pane, setPane] = useState<InsightPane>(null);
   const [bookmarks, setBookmarks] = useState<PersonalBookmark[]>([]);
   const [bookmarkName, setBookmarkName] = useState("");
+  const [activeReportBookmarkId, setActiveReportBookmarkId] = useState<string>();
   const [focusedVisual, setFocusedVisual] = useState<VisualDefinition>();
   const [dataVisual, setDataVisual] = useState<VisualDefinition>();
   const [drillVisual, setDrillVisual] = useState<VisualDefinition>();
@@ -71,7 +73,10 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
   }, [report.id]);
 
   const selectCategory = useCallback((field: keyof ManufacturingRecord | undefined, value: string) => {
-    if (field === "Line" || field === "Model" || field === "Customer" || field === "Shift") setFilters((current) => ({ ...current, [field]: current[field] === value ? "" : value }));
+    if (field === "Line" || field === "Model" || field === "Customer" || field === "Shift") {
+      setActiveReportBookmarkId(undefined);
+      setFilters((current) => ({ ...current, [field]: current[field] === value ? "" : value }));
+    }
   }, []);
 
   function persistBookmarks(next: PersonalBookmark[]) {
@@ -90,6 +95,24 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     setDrillContext(bookmark.drillContext ?? []);
     if (report.pages.some((item) => item.id === bookmark.pageId)) setActivePageId(bookmark.pageId);
     setDrillHistory([]);
+    setActiveReportBookmarkId(undefined);
+  }
+
+  function applyReportBookmark(bookmark: ReportBookmarkDefinition, rememberCurrent = false) {
+    if (rememberCurrent) setDrillHistory((current) => [...current, { pageId: page.id, filters: { ...filters }, drillContext: structuredClone(drillContext) }]);
+    setFilters({
+      from: bookmark.filters?.from ?? defaultFilters.from,
+      to: bookmark.filters?.to ?? defaultFilters.to,
+      Line: bookmark.filters?.Line ?? "",
+      Model: bookmark.filters?.Model ?? "",
+      Customer: bookmark.filters?.Customer ?? "",
+      Shift: bookmark.filters?.Shift ?? "",
+    });
+    if (report.pages.some((item) => item.id === bookmark.pageId)) setActivePageId(bookmark.pageId);
+    setDrillContext([]);
+    if (!rememberCurrent) setDrillHistory([]);
+    setDrillVisual(undefined);
+    setActiveReportBookmarkId(bookmark.id);
   }
 
   function openPage(pageId: string) {
@@ -99,6 +122,7 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     setDrillVisual(undefined);
     setFocusedVisual(undefined);
     setDataVisual(undefined);
+    setActiveReportBookmarkId(undefined);
   }
 
   function enterDrillthrough(target: ReportPage, field: keyof ManufacturingRecord, value: string) {
@@ -119,6 +143,34 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     setDrillHistory((current) => current.slice(0, -1));
   }
 
+  function runReportAction(action: ReportActionDefinition) {
+    if (action.type === "page" && action.targetId && report.pages.some((item) => item.id === action.targetId)) {
+      setDrillHistory((current) => [...current, { pageId: page.id, filters: { ...filters }, drillContext: structuredClone(drillContext) }]);
+      setActivePageId(action.targetId);
+      setDrillContext([]);
+      setDrillVisual(undefined);
+      setFocusedVisual(undefined);
+      setDataVisual(undefined);
+      setActiveReportBookmarkId(undefined);
+      return;
+    }
+    if (action.type === "bookmark" && action.targetId) {
+      const bookmark = report.bookmarks?.find((item) => item.id === action.targetId);
+      if (bookmark) applyReportBookmark(bookmark, true);
+      return;
+    }
+    if (action.type === "back") {
+      returnFromDrillthrough();
+      return;
+    }
+    if (action.type === "resetFilters") {
+      setFilters(defaultFilters);
+      setDrillContext([]);
+      setDrillHistory([]);
+      setActiveReportBookmarkId(undefined);
+    }
+  }
+
   async function exportData(format: "csv" | "xlsx") {
     const queryFilters = [
       filters.from ? { field: "RecordDate", operator: "greaterThanOrEqual", value: filters.from } : null,
@@ -134,7 +186,7 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
   }
 
   const activeCount = [filters.from, filters.to, filters.Line, filters.Model, filters.Customer, filters.Shift].filter(Boolean).length + drillContext.length;
-  const canvasState = resolveReportCanvasState({ datasetStatus: dataset.status, totalRows: typedRecords.length, metadataRows: metadataFiltered.length, filteredRows: filtered.length, visualCount: page.visuals.length });
+  const canvasState = resolveReportCanvasState({ datasetStatus: dataset.status, totalRows: typedRecords.length, metadataRows: metadataFiltered.length, filteredRows: filtered.length, visualCount: page.visuals.length + (page.controls?.length ?? 0) });
 
   return <main className="report-page">
     <nav className="report-tabs" aria-label="Report pages">
@@ -147,8 +199,8 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
       <div className="report-command-actions">
         <button className={`button ${pane === "filters" ? "active" : ""}`} onClick={() => setPane((current) => current === "filters" ? null : "filters")}><Filter size={14} /> Filters</button>
         <button className={`button ${pane === "bookmarks" ? "active" : ""}`} onClick={() => setPane((current) => current === "bookmarks" ? null : "bookmarks")}><Bookmark size={14} /> Bookmarks</button>
-        <button className="button" title="Clear all filters" onClick={() => setFilters({ ...defaultFilters, from: "", to: "" })}><FilterX size={14} /> Clear</button>
-        <button className="button" title="Reset to the report default" onClick={() => setFilters(defaultFilters)}><RotateCcw size={14} /> Reset</button>
+        <button className="button" title="Clear all filters" onClick={() => { setFilters({ ...defaultFilters, from: "", to: "" }); setActiveReportBookmarkId(undefined); }}><FilterX size={14} /> Clear</button>
+        <button className="button" title="Reset to the report default" onClick={() => { setFilters(defaultFilters); setActiveReportBookmarkId(undefined); }}><RotateCcw size={14} /> Reset</button>
         <button className="button" onClick={() => exportData("csv")}><Download size={14} /> CSV</button>
         <button className="button" onClick={() => exportData("xlsx")}><Download size={14} /> Excel</button>
         {canComment && <CommentsPanel reportId={report.id} />}
@@ -164,12 +216,13 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
                 const canDrillthrough = visualHierarchy(visual).some((field) => drillthroughTargets(report.pages, page.id, field).length > 0);
                 return <div className="report-grid-item" style={reportGridStyle(visual)} key={visual.id}><ReportVisual visual={visual} rows={filtered} activeFilters={filters} onSelect={selectCategory} onFocus={setFocusedVisual} onShowData={setDataVisual} onDrillthrough={canDrillthrough ? setDrillVisual : undefined} /></div>;
               })}
+              {page.controls?.map((control) => <div className="report-grid-item" style={reportGridStyle(control)} key={control.id}><ReportControl control={control} pages={report.pages} bookmarks={report.bookmarks ?? []} activePageId={page.id} activeBookmarkId={activeReportBookmarkId} onAction={runReportAction} /></div>)}
             </div>
           </section>
         </ReportCanvasState>
       </div>
-      {pane === "filters" && <FiltersPane filters={filters} setFilters={setFilters} unique={unique} reportFilterCount={report.filters?.length ?? 0} pageFilterCount={page.filters?.length ?? 0} drillContext={drillContext} onClose={() => setPane(null)} />}
-      {pane === "bookmarks" && <BookmarksPane bookmarks={bookmarks} name={bookmarkName} setName={setBookmarkName} onSave={saveBookmark} onApply={applyBookmark} onDelete={(id) => persistBookmarks(bookmarks.filter((item) => item.id !== id))} onClose={() => setPane(null)} />}
+      {pane === "filters" && <FiltersPane filters={filters} setFilters={(next) => { setFilters(next); setActiveReportBookmarkId(undefined); }} unique={unique} reportFilterCount={report.filters?.length ?? 0} pageFilterCount={page.filters?.length ?? 0} drillContext={drillContext} onClose={() => setPane(null)} />}
+      {pane === "bookmarks" && <BookmarksPane reportBookmarks={report.bookmarks ?? []} activeReportBookmarkId={activeReportBookmarkId} onApplyReport={applyReportBookmark} bookmarks={bookmarks} name={bookmarkName} setName={setBookmarkName} onSave={saveBookmark} onApply={applyBookmark} onDelete={(id) => persistBookmarks(bookmarks.filter((item) => item.id !== id))} onClose={() => setPane(null)} />}
     </div>
     {focusedVisual && <VisualDialog title={`${focusedVisual.title} — focus mode`} onClose={() => setFocusedVisual(undefined)}><ReportVisual visual={focusedVisual} rows={filtered} activeFilters={filters} onSelect={selectCategory} showActions={false} /></VisualDialog>}
     {dataVisual && <VisualDialog title={`${dataVisual.title} — underlying data`} onClose={() => setDataVisual(undefined)}><VisualDataTable visual={dataVisual} rows={filtered} dataset={dataset} /></VisualDialog>}
@@ -177,7 +230,7 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
   </main>;
 }
 
-function reportGridStyle(visual: VisualDefinition): CSSProperties {
+function reportGridStyle(visual: { x: number; y: number; w: number; h: number }): CSSProperties {
   return {
     "--report-grid-column": `${visual.x + 1} / span ${visual.w}`,
     "--report-grid-row": `${visual.y + 1} / span ${visual.h}`,
@@ -199,9 +252,12 @@ function FiltersPane({ filters, setFilters, unique, reportFilterCount, pageFilte
   </aside>;
 }
 
-function BookmarksPane({ bookmarks, name, setName, onSave, onApply, onDelete, onClose }: { bookmarks: PersonalBookmark[]; name: string; setName: (value: string) => void; onSave: () => void; onApply: (bookmark: PersonalBookmark) => void; onDelete: (id: string) => void; onClose: () => void }) {
+function BookmarksPane({ reportBookmarks, activeReportBookmarkId, onApplyReport, bookmarks, name, setName, onSave, onApply, onDelete, onClose }: { reportBookmarks: ReportBookmarkDefinition[]; activeReportBookmarkId?: string; onApplyReport: (bookmark: ReportBookmarkDefinition) => void; bookmarks: PersonalBookmark[]; name: string; setName: (value: string) => void; onSave: () => void; onApply: (bookmark: PersonalBookmark) => void; onDelete: (id: string) => void; onClose: () => void }) {
   return <aside className="insight-pane" aria-label="Personal bookmarks">
-    <div className="insight-pane-header"><div><strong>Bookmarks</strong><span>Saved in this browser</span></div><button className="icon-button" onClick={onClose} aria-label="Close bookmarks"><X size={14} /></button></div>
+    <div className="insight-pane-header"><div><strong>Bookmarks</strong><span>Published and personal views</span></div><button className="icon-button" onClick={onClose} aria-label="Close bookmarks"><X size={14} /></button></div>
+    <div className="bookmark-section-label"><strong>Report bookmarks</strong><span>Authored with this report</span></div>
+    <div className="bookmark-list report-bookmark-list">{reportBookmarks.map((bookmark) => <div className={`bookmark-item ${bookmark.id === activeReportBookmarkId ? "active" : ""}`} key={bookmark.id}><button onClick={() => onApplyReport(bookmark)}><strong>{bookmark.name}</strong><span>{bookmark.id === activeReportBookmarkId ? "Current shared view" : "Shared report view"}</span></button></div>)}{!reportBookmarks.length && <div className="empty-state compact">This report has no published bookmarks yet.</div>}</div>
+    <div className="bookmark-section-label"><strong>Personal bookmarks</strong><span>Saved in this browser</span></div>
     <div className="bookmark-create"><input aria-label="Bookmark name" placeholder={`Bookmark ${bookmarks.length + 1}`} value={name} onChange={(event) => setName(event.target.value)} /><button className="button primary" onClick={onSave}><Plus size={14} /> Add</button></div>
     <div className="bookmark-list">{bookmarks.map((bookmark) => <div className="bookmark-item" key={bookmark.id}><button onClick={() => onApply(bookmark)}><strong>{bookmark.name}</strong><span>{new Date(bookmark.createdAt).toLocaleString()}</span></button><button className="icon-button danger" aria-label={`Delete ${bookmark.name}`} onClick={() => onDelete(bookmark.id)}><Trash2 size={13} /></button></div>)}{!bookmarks.length && <div className="empty-state compact">Capture the current page and filters as a personal bookmark.</div>}</div>
   </aside>;

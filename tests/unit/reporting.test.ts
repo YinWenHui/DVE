@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSyntheticRecords } from "@/data/seed";
+import { createSyntheticRecords, seedReports } from "@/data/seed";
 import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, drillthroughTargets, resolveReportCanvasState, visualData, visualHierarchy } from "@/lib/reporting";
 import type { ReportPage, VisualDefinition } from "@/types";
 
@@ -35,6 +35,18 @@ describe("report visual metadata", () => {
     expect(drillthroughTargets(pages, "overview", "Line").map((page) => page.id)).toEqual(["line-detail"]);
     expect(drillthroughTargets(pages, "overview", "Shift")).toEqual([]);
     expect(drillthroughTargets(pages, "line-detail", "Line")).toEqual([]);
+  });
+
+  it("keeps authored bookmark and button targets inside their report", () => {
+    for (const report of seedReports) {
+      const pageIds = new Set(report.pages.map((page) => page.id));
+      const bookmarkIds = new Set(report.bookmarks?.map((bookmark) => bookmark.id));
+      expect(report.bookmarks?.every((bookmark) => pageIds.has(bookmark.pageId))).toBe(true);
+      for (const control of report.pages.flatMap((page) => page.controls ?? [])) {
+        if (control.action?.type === "page") expect(pageIds.has(control.action.targetId ?? "")).toBe(true);
+        if (control.action?.type === "bookmark") expect(bookmarkIds.has(control.action.targetId ?? "")).toBe(true);
+      }
+    }
   });
 
   it("builds chart options for the expanded visual catalog", () => {

@@ -153,10 +153,23 @@ export const seedReports: Report[] = reportNames.map(([name, slug, description],
   description,
   status: "published",
   minimumRole: minimumRoles[index],
+  bookmarks: [
+    { id: `bookmark-${index + 1}-overview`, name: "Overview", pageId: `page-${index + 1}-overview`, filters: {} },
+    { id: `bookmark-${index + 1}-line-a`, name: "Line A focus", pageId: `page-${index + 1}-overview`, filters: { Line: "Line A" } },
+  ],
   pages: [
-    { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, visuals: baseVisuals(index + 1) },
-    { id: `page-${index + 1}-detail`, name: "Detail", ordinal: 1, visuals: baseVisuals(index + 11).slice(6) },
-    { id: `page-${index + 1}-line-detail`, name: "Line detail", ordinal: 2, hidden: true, drillthrough: { fields: ["Line", "Model"], keepAllFilters: true }, visuals: baseVisuals(index + 21).slice(6) },
+    { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, visuals: baseVisuals(index + 1), controls: [
+      { id: `control-${index + 1}-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 15, w: 6, h: 1 },
+      { id: `control-${index + 1}-bookmarks`, type: "bookmarkNavigator", title: "Saved views", x: 6, y: 15, w: 6, h: 1 },
+      { id: `control-${index + 1}-detail`, type: "button", title: "Open detail", x: 0, y: 16, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-detail` } },
+    ] },
+    { id: `page-${index + 1}-detail`, name: "Detail", ordinal: 1, visuals: baseVisuals(index + 11).slice(6), controls: [
+      { id: `control-${index + 1}-detail-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 15, w: 6, h: 1 },
+      { id: `control-${index + 1}-overview`, type: "button", title: "Back to overview", x: 6, y: 15, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-overview` } },
+    ] },
+    { id: `page-${index + 1}-line-detail`, name: "Line detail", ordinal: 2, hidden: true, drillthrough: { fields: ["Line", "Model"], keepAllFilters: true }, visuals: baseVisuals(index + 21).slice(6), controls: [
+      { id: `control-${index + 1}-drill-back`, type: "button", title: "Return to source", x: 0, y: 15, w: 3, h: 1, action: { type: "back" } },
+    ] },
   ],
 }));
 

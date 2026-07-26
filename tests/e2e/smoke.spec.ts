@@ -14,7 +14,10 @@ test("mock administrator opens the seeded application and uses report controls",
   await expect(hierarchyVisual).toContainText("Model level"); await hierarchyVisual.getByRole("button", { name: "Drill up Actual by Line" }).dispatchEvent("click"); await expect(hierarchyVisual).toContainText("Line level");
   await hierarchyVisual.getByRole("button", { name: "Drill through from Actual by Line" }).dispatchEvent("click");
   const drillthroughDialog = page.getByRole("dialog", { name: /Actual by Line — drill through/ }); await expect(drillthroughDialog).toBeVisible(); await drillthroughDialog.getByLabel("Drillthrough value").selectOption("Line A"); await drillthroughDialog.getByRole("button", { name: "Open detail" }).click();
-  await expect(page.getByText("Line detail", { exact: true })).toBeVisible(); await page.getByRole("button", { name: "Filters", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("Report filters").getByText("Drillthrough: Line = Line A")).toBeVisible(); await page.getByLabel("Report filters").getByLabel("Close filters").dispatchEvent("click"); await page.getByRole("button", { name: "Back", exact: true }).click(); await expect(page.getByRole("button", { name: "Overview" })).toHaveClass(/active/);
+  await expect(page.getByText("Line detail", { exact: true })).toBeVisible(); await page.getByRole("button", { name: "Filters", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("Report filters").getByText("Drillthrough: Line = Line A")).toBeVisible(); await page.getByLabel("Report filters").getByLabel("Close filters").dispatchEvent("click"); await page.getByRole("button", { name: "Back", exact: true }).click(); await expect(page.locator(".report-tabs").getByRole("button", { name: "Overview", exact: true })).toHaveClass(/active/);
+  const bookmarkNavigator = page.getByRole("navigation", { name: "Saved views" }); await bookmarkNavigator.getByRole("button", { name: "Apply report bookmark Line A focus" }).dispatchEvent("click"); await expect(page.locator(".filter-summary")).toContainText("Line A");
+  await page.getByRole("navigation", { name: "Page navigator" }).getByRole("button", { name: "Open Detail page" }).dispatchEvent("click"); await expect(page.locator(".report-tabs").getByRole("button", { name: "Detail", exact: true })).toHaveClass(/active/); await page.getByRole("button", { name: "Back to overview" }).dispatchEvent("click"); await expect(page.locator(".report-tabs").getByRole("button", { name: "Overview", exact: true })).toHaveClass(/active/);
+  await page.getByRole("navigation", { name: "Saved views" }).getByRole("button", { name: "Apply report bookmark Overview" }).dispatchEvent("click"); await expect(page.locator(".filter-summary i")).toHaveCount(0);
   const kpiPositions = await page.locator(".report-grid-item").evaluateAll((items) => items.slice(0, 4).map((item) => ({ x: Math.round(item.getBoundingClientRect().x), y: Math.round(item.getBoundingClientRect().y) })));
   expect(kpiPositions[1]?.x).toBeGreaterThan(kpiPositions[0]?.x ?? 0); expect(kpiPositions[3]?.y).toBeGreaterThan(kpiPositions[0]?.y ?? 0);
   await page.getByTitle("Toggle theme").dispatchEvent("click"); await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -27,6 +30,7 @@ test("mock administrator opens the seeded application and uses report controls",
   await expect(page.getByText("Line A", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Bookmarks", exact: true }).dispatchEvent("click");
   const bookmarksPane = page.getByLabel("Personal bookmarks");
+  await expect(bookmarksPane.getByText("Report bookmarks")).toBeVisible(); await expect(bookmarksPane.getByText("Line A focus")).toBeVisible();
   await bookmarksPane.getByLabel("Bookmark name").evaluate((element) => { const input = element as HTMLInputElement; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(input, "Line A view"); input.dispatchEvent(new Event("input", { bubbles: true })); }); await bookmarksPane.getByRole("button", { name: "Add" }).dispatchEvent("click");
   await expect(bookmarksPane.getByText("Line A view")).toBeVisible(); await bookmarksPane.getByLabel("Close bookmarks").dispatchEvent("click");
   await page.getByRole("button", { name: "Show data for Actual by Line" }).dispatchEvent("click");
@@ -45,13 +49,16 @@ test("mock administrator opens the seeded application and uses report controls",
   await page.goto("/app/digital-verse-demo/report/dl-report-dc-line");
   await expect(page.getByText("Actual by Line")).toBeVisible();
   await page.goto("/admin/reports/report-1/edit"); await expect(page.getByText("Canvas", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Line detail" }).dispatchEvent("click"); await expect(page.getByLabel("Use page as drillthrough target")).toBeChecked(); await expect(page.getByLabel("Drillthrough field Line")).toBeChecked();
+  await page.getByRole("button", { name: "Edit page Line detail" }).dispatchEvent("click"); await expect(page.getByLabel("Use page as drillthrough target")).toBeChecked(); await expect(page.getByLabel("Drillthrough field Line")).toBeChecked();
+  await page.getByRole("button", { name: "Edit page Overview" }).dispatchEvent("click"); await page.getByRole("button", { name: "Move Open detail" }).dispatchEvent("click"); await page.getByRole("button", { name: "Build" }).dispatchEvent("click"); await expect(page.getByLabel("Control type")).toHaveValue("button"); await expect(page.getByLabel("Button action")).toHaveValue("page"); await expect(page.getByLabel("Button target page")).toHaveValue("page-1-detail");
+  await page.getByRole("button", { name: "Add Bookmark navigator" }).click(); await expect(page.getByLabel("Control type")).toHaveValue("bookmarkNavigator"); await page.getByLabel("Control title").fill("Quick views"); await page.getByRole("button", { name: "Line A focus", exact: true }).click(); await expect(page.getByLabel("Report bookmark name")).toHaveValue("Line A focus"); await expect(page.getByLabel("Report bookmark Line", { exact: true })).toHaveValue("Line A");
   await page.getByRole("button", { name: "Move Actual by Line" }).dispatchEvent("click"); await page.getByRole("button", { name: "Build" }).dispatchEvent("click");
   await expect(page.getByLabel("Drill level 2")).toHaveValue("Model"); await expect(page.getByLabel("Drill level 3")).toHaveValue("Shift");
   await page.getByRole("button", { name: "Add Gauge" }).click({ timeout: 10_000 }); await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
   await expect(page.getByText("Format visual")).toBeVisible(); await expect(page.getByText("Show title")).toBeVisible();
   const builderViewport = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
   expect(builderViewport.scrollWidth).toBeLessThanOrEqual(builderViewport.clientWidth + 1);
+  const savedReport = page.waitForResponse((response) => response.url().includes("/api/reports/report-1") && response.request().method() === "PUT", { timeout: 20_000 }); await page.getByRole("button", { name: "Save draft" }).dispatchEvent("click"); expect((await savedReport).ok()).toBe(true); await expect(page.getByText("Report saved.")).toBeVisible({ timeout: 20_000 }); await page.reload(); await expect(page.getByRole("button", { name: "Move Quick views" })).toBeVisible();
   expect(browserErrors).toEqual([]);
 });
 
