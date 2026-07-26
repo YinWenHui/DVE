@@ -20,7 +20,7 @@ Hosting, production security hardening, service packaging, centralized monitorin
 | Authoring | Live visual previews, draggable/resizable desktop and authored mobile grids, per-device visibility, text boxes, shapes, images, accessible object metadata, automated accessibility/contrast inspection, keyboard move/resize/delete, high-contrast preview, ordered category/value/tooltip wells, configurable table columns and matrix row/value wells, multi-measure series, legend splitting, small multiples, field reordering, aggregation and number format, capped undo/redo history, object copy/paste, and a selection pane with visibility and ordering |
 | Formatting | Persisted report themes, reusable visual format presets, page backgrounds/wallpapers, visible and configurable snap grids, title visibility/alignment, accent/background colors, radius, legend, labels, gridlines, tooltip and cross-filter switches, plus ordered threshold rules for chart/KPI colors and table/matrix backgrounds, text, and data bars |
 | Pages | Add, rename, duplicate, hide/show, delete, style, and configure authoring-grid behavior |
-| Distribution | Published app navigation, audience visibility, comments, CSV and Excel data export |
+| Distribution | Published app navigation, audience visibility, comments, CSV/Excel data export, current-page PNG export, multi-page PDF and PowerPoint generation, and fullscreen presentation mode with keyboard/page navigation |
 
 ## Remaining front-end phases
 
@@ -30,8 +30,7 @@ Hosting, production security hardening, service packaging, centralized monitorin
 
 ### Front-end phase D — distribution experience
 
-- PDF and image export, then PowerPoint generation.
-- Subscription, scheduled delivery, kiosk/play mode, and presentation navigation.
+- Subscription and scheduled delivery.
 - Usage views, favorites/recent items, endorsement labels, and richer workspace browsing.
 
 ## Acceptance rule

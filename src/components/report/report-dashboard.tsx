@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
-import { ArrowLeft, Bookmark, CornerUpRight, Download, Filter, FilterX, Lock, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, CornerUpRight, Download, FileImage, FileText, Filter, FilterX, Lock, MonitorPlay, Plus, Presentation, RotateCcw, Trash2, X } from "lucide-react";
 import { CommentsPanel } from "./comments-panel";
 import { ReportCanvasState } from "./report-canvas-state";
 import { ReportControl } from "./report-control";
 import { ReportVisual } from "./report-visual";
+import { captureReportCanvas, downloadReportImage, downloadReportPdf, downloadReportPowerPoint, type ReportPageCapture } from "@/lib/report-export";
 import { applyReportFilters, drillthroughTargets, resolveReportCanvasState, resolveVisualInteractionRows, visualData, visualHierarchy, visualInteractionMode, type VisualInteractionSelection } from "@/lib/reporting";
 import type { Dataset, ManufacturingRecord, Report, ReportActionDefinition, ReportBookmarkDefinition, ReportFilterDefinition, ReportPage, VisualDefinition } from "@/types";
 
@@ -54,6 +55,10 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
   const [drillHistory, setDrillHistory] = useState<DrillHistoryEntry[]>([]);
   const [visualSelections, setVisualSelections] = useState<VisualInteractionSelection[]>([]);
   const [filterOverrides, setFilterOverrides] = useState<FilterOverrideMap>({});
+  const [exportMenu, setExportMenu] = useState(false);
+  const [exportBusy, setExportBusy] = useState<"png" | "pdf" | "pptx">();
+  const [exportMessage, setExportMessage] = useState("");
+  const [presentationMode, setPresentationMode] = useState(false);
   const page = (report.pages.find((item) => item.id === activePageId) ?? visiblePages[0] ?? report.pages[0])!;
   const effectiveReportFilters = useMemo(() => applyFilterOverrides(report.filters ?? [], filterOverrides), [filterOverrides, report.filters]);
   const effectivePageFilters = useMemo(() => applyFilterOverrides(page.filters ?? [], filterOverrides), [filterOverrides, page.filters]);
@@ -90,6 +95,34 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     } catch { /* Browser privacy settings can disable local storage. */ }
     return () => window.cancelAnimationFrame(frame);
   }, [report.id]);
+
+  useEffect(() => {
+    if (!presentationMode) return;
+    document.documentElement.dataset.presentationMode = "true";
+    const exit = () => {
+      if (!document.fullscreenElement) setPresentationMode(false);
+    };
+    document.addEventListener("fullscreenchange", exit);
+    return () => {
+      delete document.documentElement.dataset.presentationMode;
+      document.removeEventListener("fullscreenchange", exit);
+    };
+  }, [presentationMode]);
+
+  useEffect(() => {
+    if (!presentationMode) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return;
+      const current = visiblePages.findIndex((item) => item.id === page.id);
+      if (event.key === "Escape") { setPresentationMode(false); if (document.fullscreenElement) void document.exitFullscreen(); }
+      else if (event.key === "ArrowRight" || event.key === "PageDown") { event.preventDefault(); setActivePageId(visiblePages[(current + 1) % visiblePages.length]?.id ?? page.id); }
+      else if (event.key === "ArrowLeft" || event.key === "PageUp") { event.preventDefault(); setActivePageId(visiblePages[(current - 1 + visiblePages.length) % visiblePages.length]?.id ?? page.id); }
+      else if (event.key === "Home") { event.preventDefault(); setActivePageId(visiblePages[0]?.id ?? page.id); }
+      else if (event.key === "End") { event.preventDefault(); setActivePageId(visiblePages.at(-1)?.id ?? page.id); }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [page.id, presentationMode, visiblePages]);
 
   const selectCategory = useCallback((sourceVisualId: string, field: keyof ManufacturingRecord | undefined, value: string) => {
     if (!field) return;
@@ -218,6 +251,52 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     anchor.href = url; anchor.download = `${report.slug}.${format}`; anchor.click(); URL.revokeObjectURL(url);
   }
 
+  const nextCanvasPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+
+  async function capturePages(targetPages: ReportPage[]): Promise<ReportPageCapture[]> {
+    const previousPageId = page.id;
+    const captures: ReportPageCapture[] = [];
+    for (const target of targetPages) {
+      setActivePageId(target.id);
+      await nextCanvasPaint();
+      const canvas = document.querySelector<HTMLElement>("[data-report-canvas]");
+      if (!canvas) throw new Error(`Unable to capture ${target.name}.`);
+      captures.push({ pageName: target.name, ...await captureReportCanvas(canvas) });
+    }
+    setActivePageId(previousPageId);
+    await nextCanvasPaint();
+    return captures;
+  }
+
+  async function exportReport(format: "png" | "pdf" | "pptx") {
+    setExportBusy(format);
+    setExportMenu(false);
+    setExportMessage(`Preparing ${format === "pptx" ? "PowerPoint" : format.toLocaleUpperCase()}…`);
+    try {
+      const captures = await capturePages(format === "png" ? [page] : visiblePages);
+      if (format === "png") await downloadReportImage(captures[0]!, report.slug);
+      else if (format === "pdf") await downloadReportPdf(captures, report.slug);
+      else await downloadReportPowerPoint(captures, report.name, report.slug);
+      setExportMessage(`${format === "pptx" ? "PowerPoint" : format.toLocaleUpperCase()} export ready.`);
+    } catch (error) {
+      setExportMessage(error instanceof Error ? error.message : "Report export failed.");
+    } finally {
+      setExportBusy(undefined);
+    }
+  }
+
+  async function enterPresentation() {
+    setPane(null);
+    setExportMenu(false);
+    setPresentationMode(true);
+    try { await document.documentElement.requestFullscreen?.(); } catch { /* Presentation mode still works when fullscreen permission is unavailable. */ }
+  }
+
+  function exitPresentation() {
+    setPresentationMode(false);
+    if (document.fullscreenElement) void document.exitFullscreen();
+  }
+
   const activeCount = [filters.from, filters.to, filters.Line, filters.Model, filters.Customer, filters.Shift].filter(Boolean).length + effectiveReportFilters.length + effectivePageFilters.length + drillContext.length + visualSelections.length;
   const visibleVisuals = page.visuals.filter((visual) => !visual.hidden);
   const visibleControls = page.controls?.filter((control) => !control.hidden) ?? [];
@@ -228,7 +307,8 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
   const dataRows = dataVisual ? interactionRowsFor(dataVisual.id) : undefined;
   const drillRows = drillVisual ? interactionRowsFor(drillVisual.id) : undefined;
 
-  return <main className="report-page" style={reportThemeStyle(report)} data-report-theme={report.theme?.name}>
+  return <main className={`report-page ${presentationMode ? "presentation-mode" : ""}`} style={reportThemeStyle(report)} data-report-theme={report.theme?.name}>
+    {presentationMode && <div className="presentation-toolbar" role="toolbar" aria-label="Presentation navigation"><strong>{report.name}</strong><span>{page.name} · {visiblePages.findIndex((item) => item.id === page.id) + 1} / {visiblePages.length}</span><button className="icon-button" aria-label="Previous report page" onClick={() => setActivePageId(visiblePages[(visiblePages.findIndex((item) => item.id === page.id) - 1 + visiblePages.length) % visiblePages.length]?.id ?? page.id)}><ChevronLeft size={16} /></button><button className="icon-button" aria-label="Next report page" onClick={() => setActivePageId(visiblePages[(visiblePages.findIndex((item) => item.id === page.id) + 1) % visiblePages.length]?.id ?? page.id)}><ChevronRight size={16} /></button><button className="button" onClick={exitPresentation}><X size={14} /> Exit</button></div>}
     <nav className="report-tabs" aria-label="Report pages">
       {drillHistory.length > 0 && <button className="report-tab drillthrough-back" onClick={returnFromDrillthrough}><ArrowLeft size={13} /> Back</button>}
       {visiblePages.map((item) => <button className={`report-tab ${item.id === page.id ? "active" : ""}`} key={item.id} onClick={() => openPage(item.id)}>{item.name}</button>)}
@@ -243,9 +323,12 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
         <button className="button" title="Reset to the report default" onClick={() => { setFilters(defaultFilters); setVisualSelections([]); setFilterOverrides({}); setActiveReportBookmarkId(undefined); }}><RotateCcw size={14} /> Reset</button>
         <button className="button" onClick={() => exportData("csv")}><Download size={14} /> CSV</button>
         <button className="button" onClick={() => exportData("xlsx")}><Download size={14} /> Excel</button>
+        <div className="export-menu-wrap"><button className={`button ${exportMenu ? "active" : ""}`} aria-expanded={exportMenu} aria-haspopup="menu" disabled={Boolean(exportBusy)} onClick={() => setExportMenu((current) => !current)}><FileImage size={14} /> {exportBusy ? "Exporting…" : "Export"}</button>{exportMenu && <div className="export-menu" role="menu" aria-label="Report export formats"><button role="menuitem" onClick={() => void exportReport("png")}><FileImage size={14} /><span><strong>PNG image</strong><small>Current report page</small></span></button><button role="menuitem" onClick={() => void exportReport("pdf")}><FileText size={14} /><span><strong>PDF document</strong><small>All visible pages</small></span></button><button role="menuitem" onClick={() => void exportReport("pptx")}><Presentation size={14} /><span><strong>PowerPoint</strong><small>One slide per visible page</small></span></button></div>}</div>
+        <button className="button" onClick={() => void enterPresentation()}><MonitorPlay size={14} /> Present</button>
         {canComment && <CommentsPanel reportId={report.id} />}
       </div>
     </div>
+    {exportMessage && <div className="export-status" role="status">{exportMessage}<button className="icon-button" aria-label="Dismiss export status" onClick={() => setExportMessage("")}><X size={12} /></button></div>}
     <div className="report-workspace">
       <div className="report-workspace-main">
         <div className="source-strip"><span>Source updated <strong>{new Date(freshness.sourceUpdatedAt).toLocaleString()}</strong></span><span>Dataset imported <strong>{new Date(freshness.importedAt).toLocaleString()}</strong></span><span>Browser loaded <strong>{browserLoadedAt ? new Date(browserLoadedAt).toLocaleString() : "Loading…"}</strong></span><span>Rows in context <strong>{filtered.length.toLocaleString()}</strong></span>{visualSelections.length > 0 && <span>Visual selections <strong>{visualSelections.length}</strong></span>}</div>

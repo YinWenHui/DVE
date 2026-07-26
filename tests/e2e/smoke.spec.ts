@@ -80,6 +80,25 @@ test("mock administrator opens the seeded application and uses report controls",
     .boundingBox();
   expect(mobileActual?.x).toBeGreaterThan(mobilePlan?.x ?? 0);
   await page.setViewportSize({ width: 950, height: 1050 });
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: /PDF document/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /PowerPoint/ })).toBeVisible();
+  const imageDownload = page.waitForEvent("download", { timeout: 60_000 });
+  await page.getByRole("menuitem", { name: /PNG image/ }).click();
+  const image = await imageDownload;
+  expect(image.suggestedFilename()).toBe("dl-report-dc-line-overview.png");
+  expect(await image.failure()).toBeNull();
+  await expect(page.getByRole("status")).toContainText("PNG export ready");
+  await page.getByRole("button", { name: "Present", exact: true }).click();
+  const presentation = page.getByRole("toolbar", { name: "Presentation navigation" });
+  await expect(presentation).toContainText("Overview · 1 / 2");
+  await expect(page.locator(".app-sidebar")).toBeHidden();
+  await presentation.getByRole("button", { name: "Next report page" }).click();
+  await expect(presentation).toContainText("Detail · 2 / 2");
+  await page.keyboard.press("ArrowRight");
+  await expect(presentation).toContainText("Overview · 1 / 2");
+  await presentation.getByRole("button", { name: "Exit", exact: true }).click();
+  await expect(presentation).toBeHidden();
   const planCard = page.locator('[data-visual-title="Plan"]');
   const actualCard = page.locator('[data-visual-title="Actual"]');
   const gapCard = page.locator('[data-visual-title="Gap"]');
@@ -687,4 +706,21 @@ test("viewer is blocked from administration", async ({ page }) => {
   await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 });
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 });
+});
+
+test("administrator generates a multi-page PowerPoint", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await page.goto("/login");
+  await page.getByRole("button", { name: /Administrator/ }).click();
+  await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 });
+  await page.goto("/app/digital-verse-demo/report/dl-report-dc-line");
+  await expect(page.getByText("Actual by Line")).toBeVisible();
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const powerPointDownload = page.waitForEvent("download", { timeout: 60_000 });
+  await page.getByRole("menuitem", { name: /PowerPoint/ }).click();
+  const powerPoint = await powerPointDownload;
+  expect(powerPoint.suggestedFilename()).toBe("dl-report-dc-line.pptx");
+  expect(await powerPoint.failure()).toBeNull();
+  await expect(page.getByRole("status")).toContainText("PowerPoint export ready");
 });

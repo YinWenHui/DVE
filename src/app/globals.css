@@ -161,6 +161,23 @@ h1, h2, h3, h4, p { margin-top: 0; }
 .report-command-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .report-command-actions .button { min-height: 34px; padding: 6px 10px; font-size: .7rem; }
 .report-command-actions .button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.export-menu-wrap { position: relative; }
+.export-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; display: grid; width: 220px; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); box-shadow: var(--shadow); }
+.export-menu button { display: flex; align-items: center; gap: 9px; padding: 10px 11px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.export-menu button:last-child { border-bottom: 0; }
+.export-menu button:hover { background: var(--accent-soft); color: var(--accent); }
+.export-menu button span { display: grid; gap: 2px; }
+.export-menu button strong { font-size: .7rem; }
+.export-menu button small { color: var(--muted); font-size: .61rem; }
+.export-status { position: fixed; right: 20px; bottom: 20px; z-index: 80; display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-size: .7rem; }
+.presentation-toolbar { position: fixed; top: 12px; left: 50%; z-index: 100; display: flex; align-items: center; gap: 10px; padding: 7px 9px 7px 13px; transform: translateX(-50%); border: 1px solid var(--border-strong); border-radius: 10px; background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: var(--shadow); backdrop-filter: blur(12px); }
+.presentation-toolbar strong { font-size: .72rem; }
+.presentation-toolbar span { color: var(--muted); font-size: .66rem; }
+html[data-presentation-mode="true"] .app-sidebar, html[data-presentation-mode="true"] .topbar, html[data-presentation-mode="true"] .report-tabs, html[data-presentation-mode="true"] .report-command-bar { display: none; }
+html[data-presentation-mode="true"] .app-shell { display: block; min-width: 0; background: #0b1020; }
+.report-page.presentation-mode { min-height: 100vh; padding: 54px 18px 18px; background: #0b1020; }
+.report-page.presentation-mode .source-strip { display: none; }
+.report-page.presentation-mode .report-canvas { max-width: 1440px; min-height: calc(100vh - 72px); margin: 0 auto; }
 .filter-summary { display: flex; min-width: 145px; align-items: center; gap: 6px; color: var(--muted); font-size: .68rem; }
 .filter-summary strong { color: var(--text); }
 .filter-summary i { padding: 3px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-style: normal; font-weight: 700; }

@@ -37,7 +37,7 @@ Synthetic manufacturing records include date, shift, business unit, neutral cust
 
 ## Boundaries
 
-PBIX import is unsupported. Power Query becomes Python/SQL ETL; DAX becomes approved calculations; report pages become metadata; visuals become ECharts/TanStack components; Apps/sections/audiences map to Digital Verse metadata. Excel Desktop is not the unattended refresh engine. Microsoft Graph, multi-table relationships, advanced DAX, advanced drill, direct source correction, PDF/image/PowerPoint, scheduled delivery, Teams, kiosk rotation, and production IIS hardening are later phases.
+PBIX import is unsupported. Power Query becomes Python/SQL ETL; DAX becomes approved calculations; report pages become metadata; visuals become ECharts/TanStack components; Apps/sections/audiences map to Digital Verse metadata. Excel Desktop is not the unattended refresh engine. Microsoft Graph, multi-table relationships, advanced DAX, advanced drill, direct source correction, scheduled delivery, Teams, and production IIS hardening are later phases. The pilot now provides client-side PNG, PDF, and PowerPoint report generation plus fullscreen presentation navigation.
 
 ## Acceptance criteria
 
