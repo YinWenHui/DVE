@@ -160,6 +160,24 @@ export interface VisualSortDefinition {
   direction: "asc" | "desc";
 }
 
+export type ConditionalFormattingOperator = "greaterThan" | "greaterThanOrEqual" | "lessThan" | "lessThanOrEqual" | "equals" | "between";
+export type ConditionalFormattingTarget = "dataColor" | "backgroundColor" | "textColor" | "dataBar";
+
+export interface ConditionalFormattingRule {
+  id: string;
+  field: keyof ManufacturingRecord;
+  operator: ConditionalFormattingOperator;
+  value: number;
+  secondValue?: number;
+  target: ConditionalFormattingTarget;
+  color: string;
+}
+
+export interface VisualConditionalFormatting {
+  defaultColor?: string;
+  rules: ConditionalFormattingRule[];
+}
+
 export interface VisualDisplayOptions {
   showTitle?: boolean;
   showLegend?: boolean;
@@ -194,6 +212,7 @@ export interface VisualDefinition {
   interaction?: VisualInteractionOptions;
   filters?: ReportFilterDefinition[];
   sort?: VisualSortDefinition;
+  conditionalFormatting?: VisualConditionalFormatting;
 }
 
 export interface DrillthroughDefinition {

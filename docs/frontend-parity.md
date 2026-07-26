@@ -18,15 +18,11 @@ Hosting, production security hardening, service packaging, centralized monitorin
 | Interactions | Persisted source-to-target filter/highlight/none editing, hierarchy drill down/up/expand controls, hidden drillthrough targets with carried filter context/back navigation, authored page/bookmark/back/reset buttons, page and bookmark navigators, slicers, tooltips, reset/clear, focus mode, show underlying data |
 | Personalization | Persisted report-owned bookmarks with page/filter state plus browser-local personal bookmarks |
 | Authoring | Live visual previews, draggable/resizable grid, data field wells, secondary measures, aggregation and number format |
-| Formatting | Title visibility/alignment, accent/background colors, radius, legend, labels, gridlines, tooltip and cross-filter switches |
+| Formatting | Title visibility/alignment, accent/background colors, radius, legend, labels, gridlines, tooltip and cross-filter switches, plus ordered threshold rules for chart/KPI colors and table/matrix backgrounds, text, and data bars |
 | Pages | Add, rename, duplicate, hide/show, and delete |
 | Distribution | Published app navigation, audience visibility, comments, CSV and Excel data export |
 
 ## Remaining front-end phases
-
-### Front-end phase B — report behavior
-
-- Conditional formatting for tables, matrices, and chart data colors.
 
 ### Front-end phase C — authoring depth
 

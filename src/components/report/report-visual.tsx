@@ -4,7 +4,7 @@ import { memo, useCallback, useMemo, useState, type CSSProperties, type MouseEve
 import { ChevronUp, ChevronsDown, CornerUpRight, GitBranch, Maximize2, TableProperties } from "lucide-react";
 import { EChart } from "./echart";
 import { ProductionMatrix, ProductionTable } from "./data-table";
-import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, sortVisualRows, visualHierarchy, type VisualDrillSelection } from "@/lib/reporting";
+import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, resolveConditionalFormatting, sortVisualRows, visualHierarchy, type VisualDrillSelection } from "@/lib/reporting";
 import type { ManufacturingRecord, VisualDefinition } from "@/types";
 
 const numberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -82,18 +82,20 @@ export const ReportVisual = memo(function ReportVisual({ visual, rows, highlight
   if (visual.type === "kpi" && visual.measure) {
     const value = aggregateRows(drilledRows, visual.measure, visual.aggregation);
     const highlightedValue = drilledHighlightRows ? aggregateRows(drilledHighlightRows, visual.measure, visual.aggregation) : undefined;
+    const conditional = resolveConditionalFormatting(visual, visual.measure, value);
+    const kpiStyle = { ...style, "--visual-accent": conditional.dataColor ?? visual.conditionalFormatting?.defaultColor ?? visual.display?.accentColor ?? "var(--accent)", backgroundColor: conditional.backgroundColor ?? visual.display?.backgroundColor } as CSSProperties;
     const formatValue = (input: number) => visual.format === "percent" ? `${(input * 100).toFixed(1)}%` : numberFormat.format(input);
-    return <article className="visual-card kpi-card" style={style}>
+    return <article className="visual-card kpi-card" style={kpiStyle} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0} data-conditional-data-color={conditional.dataColor} data-conditional-background={conditional.backgroundColor}>
       {actions}
       <span>{visual.display?.showTitle === false ? null : visual.title}</span>
-      <strong>{formatValue(value)}</strong>
+      <strong style={{ color: conditional.textColor }} data-conditional-text={conditional.textColor}>{formatValue(value)}</strong>
       <small className={highlightedValue === undefined ? undefined : "interaction-highlight-summary"}>{highlightedValue === undefined ? (drilledRows.length ? "Within current filter context" : "No matching records") : `${formatValue(highlightedValue)} highlighted of ${formatValue(value)}`}</small>
     </article>;
   }
 
-  if (visual.type === "table" || visual.type === "matrix") return <article className="visual-card" style={style}>
+  if (visual.type === "table" || visual.type === "matrix") return <article className="visual-card" style={style} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0}>
     <VisualHeader visual={visual} meta={visual.type === "table" ? `${drilledRows.length} rows` : "Grouped detail"} actions={actions} />
-    <div className="visual-body">{visual.type === "table" ? <ProductionTable rows={drilledRows} highlightRows={drilledHighlightRows} /> : <ProductionMatrix rows={drilledRows} highlightRows={drilledHighlightRows} />}</div>
+    <div className="visual-body">{visual.type === "table" ? <ProductionTable visual={visual} rows={drilledRows} highlightRows={drilledHighlightRows} /> : <ProductionMatrix visual={visual} rows={drilledRows} highlightRows={drilledHighlightRows} />}</div>
   </article>;
 
   if (visual.type === "slicer" && visual.dimension) {
@@ -146,7 +148,7 @@ function VisualActions({ visual, onFocus, onShowData, onDrillthrough, drill }: {
 function ChartVisual({ visual, rows, highlightRows, onSelect, actions, style, meta }: { visual: VisualDefinition; rows: ManufacturingRecord[]; highlightRows?: ManufacturingRecord[]; onSelect?: ReportVisualProps["onSelect"]; actions: React.ReactNode; style: CSSProperties; meta: string }) {
   const option = useMemo(() => chartOption(visual, rows, highlightRows), [highlightRows, rows, visual]);
   const select = useCallback((value: string) => onSelect?.(visual.dimension, value), [onSelect, visual.dimension]);
-  return <article className="visual-card interactive" style={style}>
+  return <article className="visual-card interactive" style={style} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0}>
     <VisualHeader visual={visual} meta={meta} actions={actions} />
     <div className="visual-body"><EChart option={option} onSelect={onSelect ? select : undefined} /></div>
   </article>;

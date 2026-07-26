@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSyntheticRecords, seedReports } from "@/data/seed";
-import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, drillthroughTargets, resolveReportCanvasState, resolveVisualInteractionRows, sortVisualRows, visualData, visualHierarchy, visualInteractionMode } from "@/lib/reporting";
+import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, drillthroughTargets, matchesConditionalFormattingRule, resolveConditionalFormatting, resolveReportCanvasState, resolveVisualInteractionRows, sortVisualRows, visualData, visualHierarchy, visualInteractionMode } from "@/lib/reporting";
 import type { ReportPage, VisualDefinition } from "@/types";
 
 describe("report visual metadata", () => {
@@ -38,6 +38,23 @@ describe("report visual metadata", () => {
     const visual: VisualDefinition = { id: "sorted", type: "bar", title: "Actual by line", x: 0, y: 0, w: 6, h: 5, dimension: "Line", measure: "ActualQty", aggregation: "sum", sort: { field: "ActualQty", direction: "desc" } };
     expect(visualData(visual, rows).rows.map((row) => row[0])).toEqual(["Line C", "Line B", "Line A"]);
     expect(sortVisualRows({ ...visual, sort: { field: "Line", direction: "desc" } }, rows).at(0)?.Line).toBe("Line C");
+  });
+
+  it("resolves ordered conditional-formatting targets and between thresholds", () => {
+    const visual: VisualDefinition = { id: "conditional", type: "kpi", title: "Achievement", x: 0, y: 0, w: 2, h: 2, measure: "AchievementRate", conditionalFormatting: { rules: [
+      { id: "green", field: "AchievementRate", operator: "greaterThanOrEqual", value: 1, target: "dataColor", color: "#18a66a" },
+      { id: "later", field: "AchievementRate", operator: "greaterThan", value: 1, target: "dataColor", color: "#000000" },
+      { id: "background", field: "AchievementRate", operator: "between", value: .95, secondValue: 1.05, target: "backgroundColor", color: "#dcfce7" },
+    ] } };
+    expect(matchesConditionalFormattingRule(1.02, visual.conditionalFormatting!.rules[2]!)).toBe(true);
+    expect(resolveConditionalFormatting(visual, "AchievementRate", 1.02)).toEqual({ dataColor: "#18a66a", backgroundColor: "#dcfce7" });
+    expect(resolveConditionalFormatting(visual, "ActualQty", 1.02)).toEqual({});
+  });
+
+  it("emits conditional data colors for grouped chart values", () => {
+    const visual: VisualDefinition = { id: "colored", type: "bar", title: "Actual by line", x: 0, y: 0, w: 6, h: 5, dimension: "Line", measure: "ActualQty", aggregation: "sum", conditionalFormatting: { defaultColor: "#5c73e6", rules: [{ id: "all-green", field: "ActualQty", operator: "greaterThan", value: 0, target: "dataColor", color: "#18a66a" }] } };
+    const option = chartOption(visual, rows) as { series: Array<{ data: Array<{ itemStyle?: { color?: string } }> }> };
+    expect(option.series[0]?.data.every((item) => item.itemStyle?.color === "#18a66a")).toBe(true);
   });
 
   it("creates grouped show-data rows with a secondary measure", () => {

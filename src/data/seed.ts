@@ -121,13 +121,26 @@ const baseVisuals = (variant: number): VisualDefinition[] => [
   { id: `v-${variant}-plan`, type: "kpi", title: "Plan", x: 0, y: 0, w: 2, h: 2, measure: "PlanQty", aggregation: "sum", format: "number" },
   { id: `v-${variant}-actual`, type: "kpi", title: "Actual", x: 2, y: 0, w: 2, h: 2, measure: "ActualQty", aggregation: "sum", format: "number" },
   { id: `v-${variant}-gap`, type: "kpi", title: "Gap", x: 4, y: 0, w: 2, h: 2, measure: "GapQty", aggregation: "sum", format: "number" },
-  { id: `v-${variant}-achievement`, type: "kpi", title: "Achievement", x: 6, y: 0, w: 2, h: 2, measure: "AchievementRate", aggregation: "average", format: "percent" },
+  { id: `v-${variant}-achievement`, type: "kpi", title: "Achievement", x: 6, y: 0, w: 2, h: 2, measure: "AchievementRate", aggregation: "average", format: "percent", conditionalFormatting: { defaultColor: "#5c73e6", rules: [
+    { id: `cf-${variant}-achievement-low`, field: "AchievementRate", operator: "lessThan", value: 1, target: "dataColor", color: "#dc3545" },
+    { id: `cf-${variant}-achievement-ok`, field: "AchievementRate", operator: "greaterThanOrEqual", value: 1, target: "dataColor", color: "#18a66a" },
+  ] } },
   { id: `v-${variant}-yield`, type: "kpi", title: "Yield", x: 8, y: 0, w: 2, h: 2, measure: "YieldRate", aggregation: "average", format: "percent" },
   { id: `v-${variant}-pending`, type: "kpi", title: "Pending", x: 10, y: 0, w: 2, h: 2, measure: "PendingQty", aggregation: "sum", format: "number" },
-  { id: `v-${variant}-bar`, type: "bar", title: "Actual by Line", x: 0, y: 2, w: 6, h: 5, dimension: "Line", hierarchy: ["Line", "Model", "Shift"], measure: "ActualQty", aggregation: "sum", sort: { field: "ActualQty", direction: "desc" } },
+  { id: `v-${variant}-bar`, type: "bar", title: "Actual by Line", x: 0, y: 2, w: 6, h: 5, dimension: "Line", hierarchy: ["Line", "Model", "Shift"], measure: "ActualQty", aggregation: "sum", sort: { field: "ActualQty", direction: "desc" }, conditionalFormatting: { defaultColor: "#5c73e6", rules: [
+    { id: `cf-${variant}-line-high`, field: "ActualQty", operator: "greaterThanOrEqual", value: 10_000, target: "dataColor", color: "#18a66a" },
+    { id: `cf-${variant}-line-mid`, field: "ActualQty", operator: "between", value: 9_000, secondValue: 9_999, target: "dataColor", color: "#e2a45d" },
+    { id: `cf-${variant}-line-low`, field: "ActualQty", operator: "lessThan", value: 9_000, target: "dataColor", color: "#dc3545" },
+  ] } },
   { id: `v-${variant}-line`, type: variant % 2 === 0 ? "area" : "line", title: "Output Trend", x: 6, y: 2, w: 6, h: 5, dimension: "RecordDate", measure: "ActualQty", aggregation: "sum", filters: [{ id: `filter-${variant}-recent-trend`, field: "RecordDate", operator: "greaterThanOrEqual", value: "", mode: "relativeDate", relativeDate: { direction: "last", amount: 7, unit: "days", includeToday: true }, locked: true }] },
   { id: `v-${variant}-donut`, type: "doughnut", title: "Output by Model", x: 0, y: 7, w: 4, h: 5, dimension: "Model", measure: "ActualQty", aggregation: "sum", filters: [{ id: `filter-${variant}-top-models`, field: "Model", operator: "equals", value: "", mode: "topN", topN: { direction: "top", count: 2, byMeasure: "ActualQty", aggregation: "sum" } }] },
-  { id: `v-${variant}-matrix`, type: variant % 3 === 0 ? "matrix" : "table", title: variant % 3 === 0 ? "Line / Model Matrix" : "Production Detail", x: 4, y: 7, w: 8, h: 5 },
+  { id: `v-${variant}-matrix`, type: variant % 3 === 0 ? "matrix" : "table", title: variant % 3 === 0 ? "Line / Model Matrix" : "Production Detail", x: 4, y: 7, w: 8, h: 5, conditionalFormatting: { rules: [
+    { id: `cf-${variant}-gap-positive-bg`, field: "GapQty", operator: "greaterThanOrEqual", value: 0, target: "backgroundColor", color: "#dcfce7" },
+    { id: `cf-${variant}-gap-positive-text`, field: "GapQty", operator: "greaterThanOrEqual", value: 0, target: "textColor", color: "#166534" },
+    { id: `cf-${variant}-gap-negative-bg`, field: "GapQty", operator: "lessThan", value: 0, target: "backgroundColor", color: "#fee2e2" },
+    { id: `cf-${variant}-gap-negative-text`, field: "GapQty", operator: "lessThan", value: 0, target: "textColor", color: "#991b1b" },
+    { id: `cf-${variant}-pending-bar`, field: "PendingQty", operator: "greaterThanOrEqual", value: 0, target: "dataBar", color: "#5c73e6" },
+  ] } },
   { id: `v-${variant}-slicer`, type: "slicer", title: "Line slicer", x: 0, y: 12, w: 4, h: 3, dimension: "Line" },
 ];
 
