@@ -156,6 +156,7 @@ export const seedReports: Report[] = reportNames.map(([name, slug, description],
   pages: [
     { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, visuals: baseVisuals(index + 1) },
     { id: `page-${index + 1}-detail`, name: "Detail", ordinal: 1, visuals: baseVisuals(index + 11).slice(6) },
+    { id: `page-${index + 1}-line-detail`, name: "Line detail", ordinal: 2, hidden: true, drillthrough: { fields: ["Line", "Model"], keepAllFilters: true }, visuals: baseVisuals(index + 21).slice(6) },
   ],
 }));
 

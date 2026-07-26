@@ -12,6 +12,9 @@ test("mock administrator opens the seeded application and uses report controls",
   const hierarchyVisual = page.locator("article.visual-card", { has: page.getByText("Actual by Line", { exact: true }) }).first();
   await expect(hierarchyVisual).toContainText("Line level"); await hierarchyVisual.getByRole("button", { name: "Expand Actual by Line to next level" }).dispatchEvent("click");
   await expect(hierarchyVisual).toContainText("Model level"); await hierarchyVisual.getByRole("button", { name: "Drill up Actual by Line" }).dispatchEvent("click"); await expect(hierarchyVisual).toContainText("Line level");
+  await hierarchyVisual.getByRole("button", { name: "Drill through from Actual by Line" }).dispatchEvent("click");
+  const drillthroughDialog = page.getByRole("dialog", { name: /Actual by Line — drill through/ }); await expect(drillthroughDialog).toBeVisible(); await drillthroughDialog.getByLabel("Drillthrough value").selectOption("Line A"); await drillthroughDialog.getByRole("button", { name: "Open detail" }).click();
+  await expect(page.getByText("Line detail", { exact: true })).toBeVisible(); await page.getByRole("button", { name: "Filters", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("Report filters").getByText("Drillthrough: Line = Line A")).toBeVisible(); await page.getByLabel("Report filters").getByLabel("Close filters").dispatchEvent("click"); await page.getByRole("button", { name: "Back", exact: true }).click(); await expect(page.getByRole("button", { name: "Overview" })).toHaveClass(/active/);
   const kpiPositions = await page.locator(".report-grid-item").evaluateAll((items) => items.slice(0, 4).map((item) => ({ x: Math.round(item.getBoundingClientRect().x), y: Math.round(item.getBoundingClientRect().y) })));
   expect(kpiPositions[1]?.x).toBeGreaterThan(kpiPositions[0]?.x ?? 0); expect(kpiPositions[3]?.y).toBeGreaterThan(kpiPositions[0]?.y ?? 0);
   await page.getByTitle("Toggle theme").dispatchEvent("click"); await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -42,6 +45,7 @@ test("mock administrator opens the seeded application and uses report controls",
   await page.goto("/app/digital-verse-demo/report/dl-report-dc-line");
   await expect(page.getByText("Actual by Line")).toBeVisible();
   await page.goto("/admin/reports/report-1/edit"); await expect(page.getByText("Canvas", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Line detail" }).dispatchEvent("click"); await expect(page.getByLabel("Use page as drillthrough target")).toBeChecked(); await expect(page.getByLabel("Drillthrough field Line")).toBeChecked();
   await page.getByRole("button", { name: "Move Actual by Line" }).dispatchEvent("click"); await page.getByRole("button", { name: "Build" }).dispatchEvent("click");
   await expect(page.getByLabel("Drill level 2")).toHaveValue("Model"); await expect(page.getByLabel("Drill level 3")).toHaveValue("Shift");
   await page.getByRole("button", { name: "Add Gauge" }).click({ timeout: 10_000 }); await page.getByRole("button", { name: "Format" }).dispatchEvent("click");

@@ -153,8 +153,10 @@ h1, h2, h3, h4, p { margin-top: 0; }
 
 .report-page { min-height: calc(100vh - 68px); padding: 18px 20px 32px; }
 .report-tabs { display: flex; align-items: center; gap: 5px; margin: -4px 0 14px; }
-.report-tab { padding: 7px 11px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-size: .76rem; font-weight: 700; cursor: pointer; }
+.report-tab { display: inline-flex; align-items: center; gap: 5px; padding: 7px 11px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-size: .76rem; font-weight: 700; cursor: pointer; }
 .report-tab.active { border-color: var(--accent); color: var(--accent); }
+.report-tab.drillthrough-back { border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); }
+.report-tab.drillthrough-current { border-color: var(--accent); color: var(--accent); cursor: default; }
 .report-command-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 2px 8px rgba(16,30,54,.03); }
 .report-command-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .report-command-actions .button { min-height: 34px; padding: 6px 10px; font-size: .7rem; }
@@ -244,6 +246,13 @@ h1, h2, h3, h4, p { margin-top: 0; }
 .visual-dialog > header h2 { margin: 0; font-size: .92rem; }
 .visual-dialog-body { min-height: 0; padding: 14px; overflow: auto; }
 .visual-dialog-body > .visual-card { min-height: 580px; }
+.drillthrough-dialog { display: grid; width: min(480px, 94vw); overflow: hidden; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--surface); box-shadow: 0 24px 80px rgba(0,0,0,.28); }
+.drillthrough-dialog > header { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--border); }
+.drillthrough-dialog > header h2 { margin: 3px 0 0; font-size: 1rem; }
+.drillthrough-dialog > .form-stack { padding: 16px; }
+.drillthrough-dialog > .form-stack > p { margin: 0 0 4px; color: var(--muted); font-size: .72rem; line-height: 1.45; }
+.drillthrough-dialog > .form-stack > small { color: var(--success); font-size: .64rem; }
+.drillthrough-dialog > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface-2); }
 .empty-state.compact { min-height: 150px; padding: 18px; font-size: .7rem; }
 
 .content-page { min-height: 100vh; padding: 30px clamp(24px, 4vw, 60px); }
@@ -331,6 +340,11 @@ h1, h2, h3, h4, p { margin-top: 0; }
 .builder-tool { display: flex; align-items: center; gap: 8px; padding: 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font-size: .72rem; cursor: pointer; }
 .builder-tool.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .page-settings { margin-top: 12px; }
+.page-drillthrough-settings { display: grid; gap: 8px; margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.page-drillthrough-settings > p { margin: 0; color: var(--muted); font-size: .6rem; }
+.page-drillthrough-fields { display: grid; max-height: 125px; gap: 5px; overflow: auto; }
+.page-drillthrough-fields label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: .63rem; font-weight: 650; text-transform: none; }
+.page-drillthrough-fields input { width: 14px; min-height: 14px; }
 .builder-preview { height: 100%; overflow: hidden; border: 2px solid transparent; border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
 .builder-preview.selected { border-color: var(--accent); }
 .builder-visual-handle { display: block; width: 100%; height: 24px; overflow: hidden; padding: 0 8px; border: 0; border-bottom: 1px solid var(--border); background: var(--surface-2); color: var(--muted); font-size: .6rem; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: move; }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createSyntheticRecords } from "@/data/seed";
-import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, resolveReportCanvasState, visualData, visualHierarchy } from "@/lib/reporting";
-import type { VisualDefinition } from "@/types";
+import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, drillthroughTargets, resolveReportCanvasState, visualData, visualHierarchy } from "@/lib/reporting";
+import type { ReportPage, VisualDefinition } from "@/types";
 
 describe("report visual metadata", () => {
   const rows = createSyntheticRecords(2);
@@ -25,6 +25,16 @@ describe("report visual metadata", () => {
     const drilled = applyVisualDrillPath(rows, [{ field: "Line", value: "line a" }, { field: "Model", value: "Model X100" }]);
     expect(drilled).not.toHaveLength(0);
     expect(drilled.every((row) => row.Line === "Line A" && row.Model === "Model X100")).toBe(true);
+  });
+
+  it("finds hidden drillthrough pages that accept the selected field", () => {
+    const pages: ReportPage[] = [
+      { id: "overview", name: "Overview", ordinal: 0, visuals: [] },
+      { id: "line-detail", name: "Line detail", ordinal: 1, hidden: true, drillthrough: { fields: ["Line", "Model"], keepAllFilters: true }, visuals: [] },
+    ];
+    expect(drillthroughTargets(pages, "overview", "Line").map((page) => page.id)).toEqual(["line-detail"]);
+    expect(drillthroughTargets(pages, "overview", "Shift")).toEqual([]);
+    expect(drillthroughTargets(pages, "line-detail", "Line")).toEqual([]);
   });
 
   it("builds chart options for the expanded visual catalog", () => {

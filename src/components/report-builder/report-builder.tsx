@@ -141,6 +141,21 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
     setSelectedId(undefined);
   }
 
+  function setDrillthroughTarget(enabled: boolean) {
+    if (!page) return;
+    const firstField = dimensions[0]?.key as keyof ManufacturingRecord | undefined;
+    updatePage({ ...page, drillthrough: enabled && firstField ? { fields: [firstField], keepAllFilters: true } : undefined });
+  }
+
+  function setDrillthroughField(field: keyof ManufacturingRecord, enabled: boolean) {
+    if (!page?.drillthrough) return;
+    const fields = enabled
+      ? [...new Set([...page.drillthrough.fields, field])]
+      : page.drillthrough.fields.filter((item) => item !== field);
+    if (!fields.length) return;
+    updatePage({ ...page, drillthrough: { ...page.drillthrough, fields } });
+  }
+
   async function save(status: Report["status"] = initial?.status ?? "draft") {
     const body = { name, slug, datasetId, description, status, filters: reportFilters, pages };
     const response = await fetch(initial ? `/api/reports/${initial.id}` : "/api/reports", { method: initial ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -160,6 +175,10 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
         <div className="panel-header builder-section-heading"><div><h3>Pages</h3><p>{pages.length} report pages</p></div><button className="icon-button" onClick={addPage} aria-label="Add page"><Plus size={14} /></button></div>
         <div className="builder-tool-list">{pages.map((item, index) => <button className={`builder-tool ${index === pageIndex ? "active" : ""}`} key={item.id} onClick={() => { setPageIndex(index); setSelectedId(undefined); }}><span>{item.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</span>{item.name}</button>)}</div>
         {page && <div className="form-stack page-settings"><label>Page name<input value={page.name} onChange={(event) => updatePage({ ...page, name: event.target.value })} /></label><div className="table-actions"><button className="icon-button" title="Duplicate page" onClick={duplicatePage}><Copy size={14} /></button><button className="icon-button" title={page.hidden ? "Show page" : "Hide page"} onClick={() => updatePage({ ...page, hidden: !page.hidden })}>{page.hidden ? <Eye size={14} /> : <EyeOff size={14} />}</button><button className="icon-button danger" title="Delete page" disabled={pages.length === 1} onClick={deletePage}><Trash2 size={14} /></button></div></div>}
+        {page && <div className="page-drillthrough-settings">
+          <label className="toggle-row"><span>Drillthrough target</span><input aria-label="Use page as drillthrough target" type="checkbox" checked={Boolean(page.drillthrough)} onChange={(event) => setDrillthroughTarget(event.target.checked)} /></label>
+          {page.drillthrough && <><p>Fields accepted from source visuals</p><div className="page-drillthrough-fields">{dimensions.map((field) => { const checked = page.drillthrough?.fields.includes(field.key as keyof ManufacturingRecord) ?? false; return <label key={field.id}><input type="checkbox" aria-label={`Drillthrough field ${field.displayName}`} checked={checked} disabled={checked && page.drillthrough?.fields.length === 1} onChange={(event) => setDrillthroughField(field.key as keyof ManufacturingRecord, event.target.checked)} /> {field.displayName}</label>; })}</div><label className="toggle-row"><span>Keep all filters</span><input aria-label="Keep all drillthrough filters" type="checkbox" checked={page.drillthrough.keepAllFilters !== false} onChange={(event) => updatePage({ ...page, drillthrough: { ...page.drillthrough!, keepAllFilters: event.target.checked } })} /></label></>}
+        </div>}
       </aside>
       <section className="builder-canvas">
         <div className="builder-canvas-label"><span>Canvas</span><small>Drag headers to move · drag corners to resize</small></div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useMemo, useState, type CSSProperties, type MouseEvent } from "react";
-import { ChevronUp, ChevronsDown, GitBranch, Maximize2, TableProperties } from "lucide-react";
+import { ChevronUp, ChevronsDown, CornerUpRight, GitBranch, Maximize2, TableProperties } from "lucide-react";
 import { EChart } from "./echart";
 import { ProductionMatrix, ProductionTable } from "./data-table";
 import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, visualHierarchy, type VisualDrillSelection } from "@/lib/reporting";
@@ -17,6 +17,7 @@ interface ReportVisualProps {
   onSelect?: (field: keyof ManufacturingRecord | undefined, value: string) => void;
   onFocus?: (visual: VisualDefinition) => void;
   onShowData?: (visual: VisualDefinition) => void;
+  onDrillthrough?: (visual: VisualDefinition) => void;
   showActions?: boolean;
 }
 
@@ -25,7 +26,7 @@ interface DrillState {
   path: VisualDrillSelection[];
 }
 
-export const ReportVisual = memo(function ReportVisual({ visual, rows, activeFilters = {}, onSelect, onFocus, onShowData, showActions = true }: ReportVisualProps) {
+export const ReportVisual = memo(function ReportVisual({ visual, rows, activeFilters = {}, onSelect, onFocus, onShowData, onDrillthrough, showActions = true }: ReportVisualProps) {
   const hierarchy = useMemo(() => visualHierarchy(visual), [visual]);
   const [drill, setDrill] = useState<DrillState>({ level: 0, path: [] });
   const [drillMode, setDrillMode] = useState(false);
@@ -70,6 +71,7 @@ export const ReportVisual = memo(function ReportVisual({ visual, rows, activeFil
     visual={visual}
     onFocus={onFocus ? () => onFocus(actionVisual) : undefined}
     onShowData={onShowData ? () => onShowData(actionVisual) : undefined}
+    onDrillthrough={onDrillthrough ? () => onDrillthrough(actionVisual) : undefined}
     drill={supportsDrill ? { level, canAdvance, enabled: drillMode, onToggle: () => setDrillMode((current) => !current), onUp: drillUp, onExpand: expandNext } : undefined}
   />;
 
@@ -116,10 +118,11 @@ function VisualHeader({ visual, meta, actions }: { visual: VisualDefinition; met
   </div>;
 }
 
-function VisualActions({ visual, onFocus, onShowData, drill }: {
+function VisualActions({ visual, onFocus, onShowData, onDrillthrough, drill }: {
   visual: VisualDefinition;
   onFocus?: () => void;
   onShowData?: () => void;
+  onDrillthrough?: () => void;
   drill?: { level: number; canAdvance: boolean; enabled: boolean; onToggle: () => void; onUp: () => void; onExpand: () => void };
 }) {
   const run = (event: MouseEvent<HTMLButtonElement>, action: (() => void) | undefined) => { event.stopPropagation(); action?.(); };
@@ -127,6 +130,7 @@ function VisualActions({ visual, onFocus, onShowData, drill }: {
     {drill && drill.level > 0 && <button type="button" title="Drill up" aria-label={`Drill up ${visual.title}`} onClick={(event) => run(event, drill.onUp)}><ChevronUp size={13} /></button>}
     {drill?.canAdvance && <button type="button" className={drill.enabled ? "active" : ""} title={drill.enabled ? "Turn off drill down" : "Turn on drill down"} aria-label={`${drill.enabled ? "Turn off" : "Turn on"} drill down for ${visual.title}`} aria-pressed={drill.enabled} onClick={(event) => run(event, drill.onToggle)}><GitBranch size={13} /></button>}
     {drill?.canAdvance && <button type="button" title="Expand to the next hierarchy level" aria-label={`Expand ${visual.title} to next level`} onClick={(event) => run(event, drill.onExpand)}><ChevronsDown size={13} /></button>}
+    {onDrillthrough && <button type="button" title="Drill through" aria-label={`Drill through from ${visual.title}`} onClick={(event) => run(event, onDrillthrough)}><CornerUpRight size={13} /></button>}
     {onShowData && <button type="button" title="Show data" aria-label={`Show data for ${visual.title}`} onClick={(event) => run(event, onShowData)}><TableProperties size={13} /></button>}
     {onFocus && <button type="button" title="Focus mode" aria-label={`Focus ${visual.title}`} onClick={(event) => run(event, onFocus)}><Maximize2 size={13} /></button>}
   </div>;

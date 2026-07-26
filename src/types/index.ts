@@ -150,11 +150,17 @@ export interface VisualDefinition {
   filters?: ReportFilterDefinition[];
 }
 
+export interface DrillthroughDefinition {
+  fields: Array<keyof ManufacturingRecord>;
+  keepAllFilters?: boolean;
+}
+
 export interface ReportPage {
   id: string;
   name: string;
   ordinal: number;
   hidden?: boolean;
+  drillthrough?: DrillthroughDefinition;
   filters?: ReportFilterDefinition[];
   visuals: VisualDefinition[];
 }

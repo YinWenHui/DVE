@@ -1,5 +1,5 @@
 import type { EChartsOption } from "echarts";
-import type { Dataset, ManufacturingRecord, ReportFilterDefinition, VisualDefinition } from "@/types";
+import type { Dataset, ManufacturingRecord, ReportFilterDefinition, ReportPage, VisualDefinition } from "@/types";
 
 export type ReportCanvasState = "ready" | "stale" | "empty-report" | "no-data" | "no-metadata-results" | "no-results" | "offline" | "error";
 
@@ -16,6 +16,11 @@ export function visualHierarchy(visual: VisualDefinition): Array<keyof Manufactu
 export function applyVisualDrillPath(rows: ManufacturingRecord[], path: VisualDrillSelection[]): ManufacturingRecord[] {
   if (!path.length) return rows;
   return rows.filter((row) => path.every(({ field, value }) => String(row[field] ?? "").toLocaleLowerCase() === value.toLocaleLowerCase()));
+}
+
+export function drillthroughTargets(pages: ReportPage[], currentPageId: string, field: keyof ManufacturingRecord | undefined): ReportPage[] {
+  if (!field) return [];
+  return pages.filter((page) => page.id !== currentPageId && page.drillthrough?.fields.includes(field));
 }
 
 export function resolveReportCanvasState(input: {
