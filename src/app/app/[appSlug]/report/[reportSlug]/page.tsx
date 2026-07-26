@@ -16,6 +16,6 @@ export default async function ReportPage({ params }: { params: Promise<{ appSlug
   if (!dataset) notFound();
   const rows = await repositories.datasets.rows(dataset.id, user);
   return <AppShell app={app} reports={reports} activeReport={report} dataset={dataset} user={user}>
-    <ReportDashboard report={report} dataset={dataset} records={rows} canComment={user.roles.some((role) => role !== "VIEWER")} />
+    <ReportDashboard report={report} dataset={dataset} records={rows} canComment={user.roles.some((role) => role !== "VIEWER")} userEmail={user.email} />
   </AppShell>;
 }

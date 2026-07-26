@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowRight, LockKeyhole, ShieldCheck } from "lucide-react";
 import type { RoleCode } from "@/types";
@@ -13,7 +12,6 @@ const previewRoles: Array<{ role: RoleCode; label: string; description: string }
 ];
 
 export function LoginForm({ mockEnabled }: { mockEnabled: boolean }) {
-  const router = useRouter();
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
 
@@ -27,8 +25,7 @@ export function LoginForm({ mockEnabled }: { mockEnabled: boolean }) {
       setBusy(undefined);
       return;
     }
-    router.push("/apps");
-    router.refresh();
+    window.location.assign("/apps");
   }
 
   return (
@@ -40,10 +37,13 @@ export function LoginForm({ mockEnabled }: { mockEnabled: boolean }) {
           <div className="mock-banner"><ShieldCheck size={18} /><div><strong>Local preview mode</strong><span>Synthetic users and data only. This mode cannot run in production.</span></div></div>
           <div className="preview-role-list">
             {previewRoles.map((item) => (
-              <button key={item.role} className="preview-role" onClick={() => preview(item.role)} disabled={Boolean(busy)}>
-                <span><strong>{item.label}</strong><small>{item.description}</small></span>
-                <ArrowRight size={17} aria-hidden />
-              </button>
+              <form method="post" action="/api/auth/login" key={item.role}>
+                <input type="hidden" name="previewRole" value={item.role} />
+                <button type="submit" className="preview-role" onClick={(event) => { event.preventDefault(); void preview(item.role); }} disabled={Boolean(busy)}>
+                  <span><strong>{item.label}</strong><small>{item.description}</small></span>
+                  <ArrowRight size={17} aria-hidden />
+                </button>
+              </form>
             ))}
           </div>
         </div>

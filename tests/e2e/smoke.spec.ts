@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("mock administrator opens the seeded application and uses report controls", async ({
   page,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.message));
   page.on("console", (message) => {
@@ -16,10 +16,20 @@ test("mock administrator opens the seeded application and uses report controls",
   ).toBeVisible();
   await page.getByRole("button", { name: /Administrator/ }).click();
   await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 });
+  await expect(page.locator(".workspace-gallery")).toHaveAttribute("data-client-ready", "true");
+  await expect(page.getByRole("heading", { name: /Good to see you, Taylor/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Report library" })).toBeVisible();
+  await expect(page.getByText("certified", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Add DL Report DC Line to favorites" }).click();
+  await page.getByRole("button", { name: /Favorites 1/ }).click();
+  await expect(page.getByRole("heading", { name: "DL Report DC Line" })).toBeVisible();
+  await page.getByRole("button", { name: /All reports/ }).click();
   await page.getByRole("link", { name: /Digital Verse Demo/ }).click();
   await expect(page).toHaveURL(/\/app\/digital-verse-demo\/report\//, {
     timeout: 20_000,
   });
+  await expect(page.locator(".app-shell")).toHaveAttribute("data-client-ready", "true");
+  await expect(page.locator(".report-page")).toHaveAttribute("data-client-ready", "true");
   await expect(page.getByText("Daily Report")).toBeVisible();
   await expect(page.getByText("Actual by Line")).toBeVisible();
   await expect(
@@ -99,6 +109,26 @@ test("mock administrator opens the seeded application and uses report controls",
   await expect(presentation).toContainText("Overview · 1 / 2");
   await presentation.getByRole("button", { name: "Exit", exact: true }).click();
   await expect(presentation).toBeHidden();
+  await page.getByRole("button", { name: "Subscribe", exact: true }).click();
+  const subscriptions = page.getByRole("dialog", { name: "Report subscriptions" });
+  await subscriptions.getByLabel("Subscription name").fill("Monday leadership pack");
+  await subscriptions.getByLabel("Subscription frequency").selectOption("weekly");
+  await subscriptions.getByLabel("Subscription weekday").selectOption("1");
+  await subscriptions.getByLabel("Subscription attachment format").selectOption("pdf");
+  await subscriptions.getByRole("button", { name: "Add schedule" }).click();
+  await expect(subscriptions.getByRole("heading", { name: "Monday leadership pack" })).toBeVisible();
+  await expect(subscriptions.getByText(/Monday at/)).toBeVisible();
+  const previewDownload = page.waitForEvent("download", { timeout: 60_000 });
+  await subscriptions.getByRole("button", { name: "Send preview" }).click();
+  const preview = await previewDownload;
+  expect(preview.suggestedFilename()).toBe("dl-report-dc-line.pdf");
+  expect(await preview.failure()).toBeNull();
+  await subscriptions.getByRole("button", { name: "Pause" }).click();
+  await expect(subscriptions.getByText("paused", { exact: true })).toBeVisible();
+  await subscriptions.getByLabel("Close subscriptions").click();
+  await page.getByRole("button", { name: "Subscribe", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Report subscriptions" }).getByRole("heading", { name: "Monday leadership pack" })).toBeVisible();
+  await page.getByLabel("Close subscriptions").click();
   const planCard = page.locator('[data-visual-title="Plan"]');
   const actualCard = page.locator('[data-visual-title="Actual"]');
   const gapCard = page.locator('[data-visual-title="Gap"]');
@@ -325,6 +355,14 @@ test("mock administrator opens the seeded application and uses report controls",
   expect(reportViewport.scrollWidth).toBeLessThanOrEqual(
     reportViewport.clientWidth + 1,
   );
+  await page.goto("/apps");
+  await page.getByRole("button", { name: /Recent/ }).click();
+  await expect(page.getByRole("heading", { name: "DL Report DC Line" })).toBeVisible();
+  await expect(page.getByText(/Opened \d+× here/)).toBeVisible();
+  await page.goto("/admin/usage");
+  await expect(page.getByRole("heading", { name: "Usage analytics" })).toBeVisible();
+  await expect(page.getByText("Views on this pilot PC")).toBeVisible();
+  await expect(page.getByRole("cell", { name: "DL Report DC Line" })).toBeVisible();
   await page.goto("/admin/alerts");
   await expect(
     page.getByRole("heading", { name: "Structured alert rules" }),
@@ -333,9 +371,14 @@ test("mock administrator opens the seeded application and uses report controls",
     page.getByRole("cell", { name: "Achievement below target" }),
   ).toBeVisible();
   await page.goto("/app/digital-verse-demo/report/dl-report-dc-line");
+  await expect(page.locator(".app-shell")).toHaveAttribute("data-client-ready", "true");
+  await expect(page.locator(".report-page")).toHaveAttribute("data-client-ready", "true");
   await expect(page.getByText("Actual by Line")).toBeVisible();
   await page.goto("/admin/reports/report-1/edit");
   await expect(page.getByText("Desktop canvas", { exact: true })).toBeVisible();
+  await expect(page.locator(".builder-report-settings")).toHaveAttribute("data-client-ready", "true");
+  await page.getByLabel("Owner").fill("DC Operations Intelligence");
+  await page.getByLabel("Endorsement").selectOption("certified");
   await page
     .getByRole("button", { name: "Edit page Line detail" })
     .dispatchEvent("click");
@@ -631,6 +674,9 @@ test("mock administrator opens the seeded application and uses report controls",
     timeout: 20_000,
   });
   await page.reload();
+  await expect(page.locator(".builder-report-settings")).toHaveAttribute("data-client-ready", "true");
+  await expect(page.getByLabel("Owner")).toHaveValue("DC Operations Intelligence");
+  await expect(page.getByLabel("Endorsement")).toHaveValue("certified");
   await expect(
     page.getByRole("button", { name: "Move Quick views" }),
   ).toBeVisible();
@@ -715,6 +761,8 @@ test("administrator generates a multi-page PowerPoint", async ({ page }) => {
   await page.getByRole("button", { name: /Administrator/ }).click();
   await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 });
   await page.goto("/app/digital-verse-demo/report/dl-report-dc-line");
+  await expect(page.locator(".app-shell")).toHaveAttribute("data-client-ready", "true");
+  await expect(page.locator(".report-page")).toHaveAttribute("data-client-ready", "true");
   await expect(page.getByText("Actual by Line")).toBeVisible();
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const powerPointDownload = page.waitForEvent("download", { timeout: 60_000 });

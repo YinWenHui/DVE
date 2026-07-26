@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import {
   AppWindow, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Fullscreen, LayoutDashboard,
-  LogOut, Moon, RefreshCw, Search, Settings, Sun,
+  LogOut, Moon, RefreshCw, Search, Settings, Star, Sun,
 } from "lucide-react";
+import { recordReportVisit, toggleFavorite, type LocalReportUsage, type RecentReportEntry } from "@/lib/report-personalization";
 import type { Dataset, DveApplication, Report, User } from "@/types";
 
 interface AppShellProps {
@@ -29,6 +30,8 @@ export function AppShell({ app, reports, activeReport, dataset, user, children }
   const [refreshing, setRefreshing] = useState(false);
   const [datasetSnapshot, setDatasetSnapshot] = useState(dataset);
   const [browserLoadedAt, setBrowserLoadedAt] = useState("");
+  const [favorite, setFavorite] = useState(false);
+  const visitRecorded = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setBrowserLoadedAt(new Date().toISOString()));
@@ -39,6 +42,22 @@ export function AppShell({ app, reports, activeReport, dataset, user, children }
     const interval = window.setInterval(() => setSeconds((value) => value <= 1 ? dataset.refreshIntervalMinutes * 60 : value - 1), 1_000);
     return () => window.clearInterval(interval);
   }, [dataset.refreshIntervalMinutes]);
+
+  useEffect(() => {
+    try {
+      const favorites = JSON.parse(window.localStorage.getItem("dve:favorite-reports") ?? "[]") as string[];
+      const frame = window.requestAnimationFrame(() => setFavorite(favorites.includes(activeReport.id)));
+      if (visitRecorded.current !== activeReport.id) {
+        const recents = JSON.parse(window.localStorage.getItem("dve:recent-reports") ?? "[]") as RecentReportEntry[];
+        const usage = JSON.parse(window.localStorage.getItem("dve:report-usage") ?? "[]") as LocalReportUsage[];
+        const next = recordReportVisit(recents, usage, activeReport.id);
+        window.localStorage.setItem("dve:recent-reports", JSON.stringify(next.recents));
+        window.localStorage.setItem("dve:report-usage", JSON.stringify(next.usage));
+        visitRecorded.current = activeReport.id;
+      }
+      return () => window.cancelAnimationFrame(frame);
+    } catch { /* Personal workspace state is optional. */ }
+  }, [activeReport.id]);
 
   const reportById = useMemo(() => new Map(reports.map((report) => [report.id, report])), [reports]);
   const visibleSections = app.sections.map((section) => ({
@@ -83,8 +102,17 @@ export function AppShell({ app, reports, activeReport, dataset, user, children }
     });
   }
 
+  function toggleReportFavorite() {
+    try {
+      const favorites = JSON.parse(window.localStorage.getItem("dve:favorite-reports") ?? "[]") as string[];
+      const next = toggleFavorite(favorites, activeReport.id);
+      window.localStorage.setItem("dve:favorite-reports", JSON.stringify(next));
+      setFavorite(next.includes(activeReport.id));
+    } catch { setFavorite((current) => !current); }
+  }
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-client-ready={Boolean(browserLoadedAt)}>
       <aside className={`app-sidebar ${collapsed ? "collapsed" : ""}`} aria-label="Application navigation">
         <div className="sidebar-brand"><div className="brand-mark">{app.initials}</div><div className="sidebar-brand-copy"><strong>Digital Verse</strong><span>{app.name}</span></div></div>
         <div className="sidebar-scroll">
@@ -116,6 +144,7 @@ export function AppShell({ app, reports, activeReport, dataset, user, children }
           <div className="topbar-title"><span>{app.name}</span><h1>{activeReport.name}</h1></div>
           <div className="topbar-actions">
             <div className="topbar-search"><Search size={15} /><input aria-label="Search reports" placeholder="Search reports" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
+            <button className={`icon-button ${favorite ? "favorite" : ""}`} aria-label={`${favorite ? "Remove" : "Add"} ${activeReport.name} ${favorite ? "from" : "to"} favorites`} aria-pressed={favorite} title={favorite ? "Remove from favorites" : "Add to favorites"} onClick={toggleReportFavorite}><Star size={16} fill={favorite ? "currentColor" : "none"} /></button>
             <div className="freshness-pill"><i className="freshness-dot" /><div className="freshness-copy"><strong>{datasetSnapshot.status}</strong><span>Refresh in {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</span></div></div>
             <button className="icon-button" title="Refresh now" onClick={refresh} disabled={refreshing}><RefreshCw size={16} className={refreshing ? "spin" : ""} /></button>
             <button className="icon-button" title="Fullscreen report" onClick={fullscreen}><Fullscreen size={16} /></button>

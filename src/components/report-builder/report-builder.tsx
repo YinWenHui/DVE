@@ -62,6 +62,8 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   const [name, setName] = useState(initial?.name ?? "Untitled report");
   const [slug, setSlug] = useState(initial?.slug ?? "untitled-report");
   const [description, setDescription] = useState(initial?.description ?? "Created with the Digital Verse report builder.");
+  const [owner, setOwner] = useState(initial?.owner ?? "Manufacturing Intelligence");
+  const [endorsement, setEndorsement] = useState<Report["endorsement"]>(initial?.endorsement);
   const [datasetId, setDatasetId] = useState(dataset?.id ?? "");
   const [pages, setPages] = useState<ReportPage[]>(() => structuredClone(initial?.pages ?? [{ id: crypto.randomUUID(), name: "Overview", ordinal: 0, visuals: [] }]));
   const [reportFilters, setReportFilters] = useState<ReportFilterDefinition[]>(() => structuredClone(initial?.filters ?? []));
@@ -75,6 +77,7 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   const [canvasMode, setCanvasMode] = useState<CanvasMode>("desktop");
   const [highContrastPreview, setHighContrastPreview] = useState(false);
   const [message, setMessage] = useState<string>();
+  const [clientReady, setClientReady] = useState(false);
   const [clipboard, setClipboard] = useState<BuilderClipboard>();
   const [historyDepth, setHistoryDepth] = useState({ undo: 0, redo: 0 });
   const undoStack = useRef<BuilderSnapshot[]>([]);
@@ -88,6 +91,11 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   const measures = selectedDataset?.fields.filter((field) => !field.hidden && field.semanticType === "measure") ?? [];
   const filterFields = selectedDataset?.fields.filter((field) => !field.hidden && field.filterable) ?? [];
   const previewRows = records as unknown as ManufacturingRecord[];
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setClientReady(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
   const desktopLayout = useMemo<Layout[]>(() => [
     ...(page?.visuals.filter((visual) => !visual.hidden).map((visual) => ({ i: visual.id, x: visual.x, y: visual.y, w: visual.w, h: visual.h, minW: 2, minH: 2 })) ?? []),
     ...(page?.controls?.filter((control) => !control.hidden).map((control) => ({ i: control.id, x: control.x, y: control.y, w: control.w, h: control.h, minW: 2, minH: 1 })) ?? []),
@@ -472,7 +480,7 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   });
 
   async function save(status: Report["status"] = initial?.status ?? "draft") {
-    const body = { name, slug, datasetId, description, status, filters: reportFilters, bookmarks, theme, formatPresets, pages };
+    const body = { name, slug, datasetId, description, owner, endorsement, status, filters: reportFilters, bookmarks, theme, formatPresets, pages };
     const response = await fetch(initial ? `/api/reports/${initial.id}` : "/api/reports", { method: initial ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const payload = await response.json() as { report?: Report; error?: { message?: string } };
     setMessage(response.ok ? `Report ${status === "published" ? "published" : "saved"}.` : payload.error?.message ?? "Save failed.");
@@ -480,7 +488,7 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   }
 
   return <>
-    <div className="panel builder-report-settings"><div className="form-grid"><label>Report name<input value={name} onChange={(event) => { setName(event.target.value); if (!initial) setSlug(event.target.value.toLocaleLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-|-$/g, "")); }} /></label><label>Slug<input value={slug} onChange={(event) => setSlug(event.target.value)} /></label><label>Dataset<select value={datasetId} onChange={(event) => setDatasetId(event.target.value)}>{datasets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Description<input value={description} onChange={(event) => setDescription(event.target.value)} /></label><div className="table-actions full"><button className="button" onClick={() => save("draft")}><Save size={15} /> Save draft</button><button className="button primary" onClick={() => save("published")}>Publish report</button></div></div>{message && <p className="status-banner" style={{ marginTop: 12 }}>{message}</p>}</div>
+    <div className="panel builder-report-settings" data-client-ready={clientReady}><div className="form-grid"><label>Report name<input value={name} onChange={(event) => { setName(event.target.value); if (!initial) setSlug(event.target.value.toLocaleLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-|-$/g, "")); }} /></label><label>Slug<input value={slug} onChange={(event) => setSlug(event.target.value)} /></label><label>Dataset<select value={datasetId} onChange={(event) => setDatasetId(event.target.value)}>{datasets.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Description<input value={description} onChange={(event) => setDescription(event.target.value)} /></label><label>Owner<input value={owner} onChange={(event) => setOwner(event.target.value)} /></label><label>Endorsement<select value={endorsement ?? ""} onChange={(event) => setEndorsement(event.target.value ? event.target.value as NonNullable<Report["endorsement"]> : undefined)}><option value="">None</option><option value="promoted">Promoted</option><option value="certified">Certified</option></select></label><div className="table-actions full"><button className="button" onClick={() => save("draft")}><Save size={15} /> Save draft</button><button className="button primary" onClick={() => save("published")}>Publish report</button></div></div>{message && <p className="status-banner" style={{ marginTop: 12 }}>{message}</p>}</div>
     <div className="builder-shell">
       <aside className="builder-pane builder-left-pane">
         <div className="panel-header"><div><h3>Visualizations</h3><p>Choose a visual</p></div></div>

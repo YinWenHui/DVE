@@ -11,7 +11,8 @@ async function inputFromRequest(request: Request): Promise<unknown> {
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) return request.json();
   const form = await request.formData();
-  return { username: form.get("username"), password: form.get("password") };
+  const previewRole = form.get("previewRole");
+  return previewRole ? { previewRole } : { username: form.get("username"), password: form.get("password") };
 }
 
 export async function POST(request: Request) {
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
     const user = getMockStore().users.find((candidate) => candidate.roles.includes(previewRole));
     if (!user) return Response.json({ error: { code: "USER_NOT_FOUND", message: "The synthetic preview user is unavailable." } }, { status: 404 });
     await setSessionCookie(await createMockSession(user));
+    if (!(request.headers.get("content-type") ?? "").includes("application/json")) return new Response(null, { status: 303, headers: { Location: "/apps" } });
     return Response.json({ user });
   }
   if (config.AUTH_MODE !== "sql") return Response.json({ error: { code: "PASSWORD_LOGIN_DISABLED", message: "Password login requires SQL authentication mode." } }, { status: 403 });
@@ -45,6 +47,6 @@ export async function POST(request: Request) {
   await pool.request().input("userId", sql.UniqueIdentifier, record.user_id).input("tokenHash", sql.VarChar(64), hash).input("expiresAt", sql.DateTime2, expires)
     .query("INSERT INTO dve.sessions (session_id, user_id, token_hash, expires_at, created_at) VALUES (NEWID(), @userId, @tokenHash, @expiresAt, SYSUTCDATETIME()); UPDATE dve.users SET last_login_at = SYSUTCDATETIME(), failed_login_count = 0 WHERE user_id = @userId;");
   await setSessionCookie(rawToken);
-  if (!(request.headers.get("content-type") ?? "").includes("application/json")) return Response.redirect(new URL("/apps", request.url), 303);
+  if (!(request.headers.get("content-type") ?? "").includes("application/json")) return new Response(null, { status: 303, headers: { Location: "/apps" } });
   return Response.json({ user: { id: record.user_id, username: record.username, email: record.email, displayName: record.display_name } });
 }

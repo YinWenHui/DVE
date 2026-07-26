@@ -386,7 +386,33 @@ export interface Report {
   bookmarks?: ReportBookmarkDefinition[];
   theme?: ReportThemeDefinition;
   formatPresets?: ReportFormatPreset[];
+  endorsement?: "promoted" | "certified";
+  owner?: string;
+  lastModifiedAt?: string;
+  usage?: {
+    views30d: number;
+    uniqueViewers30d: number;
+    lastViewedAt: string;
+  };
   pages: ReportPage[];
+}
+
+export type ReportSubscriptionFrequency = "daily" | "weekly" | "monthly";
+export type ReportSubscriptionFormat = "pdf" | "pptx";
+
+export interface ReportSubscriptionDefinition {
+  id: string;
+  reportId: string;
+  name: string;
+  recipients: string[];
+  frequency: ReportSubscriptionFrequency;
+  weekday?: number;
+  monthDay?: number;
+  time: string;
+  timezone: string;
+  format: ReportSubscriptionFormat;
+  enabled: boolean;
+  createdAt: string;
 }
 
 export interface AppSection {

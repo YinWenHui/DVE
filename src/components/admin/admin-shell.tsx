@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity, AppWindow, Bell, ChevronLeft, Database, FileBarChart, Gauge, History, LayoutDashboard,
+  Activity, AppWindow, BarChart3, Bell, ChevronLeft, Database, FileBarChart, Gauge, History, LayoutDashboard,
   Settings, ShieldCheck, Users, Workflow,
 } from "lucide-react";
 
@@ -11,7 +11,7 @@ const navigation = [
   ["/admin", "Overview", Gauge], ["/admin/datasets", "Datasets", Database], ["/admin/data-sources", "Data Sources", Workflow],
   ["/admin/reports", "Reports", FileBarChart], ["/admin/apps", "Applications", AppWindow], ["/admin/audiences", "Audiences", ShieldCheck],
   ["/admin/users", "Users", Users], ["/admin/refresh", "Refresh Monitor", Activity], ["/admin/alerts", "Alerts", Bell],
-  ["/admin/audit", "Audit Log", History], ["/admin/settings", "System Settings", Settings],
+  ["/admin/usage", "Usage Analytics", BarChart3], ["/admin/audit", "Audit Log", History], ["/admin/settings", "System Settings", Settings],
 ] as const;
 
 export function AdminShell({ children }: { children: React.ReactNode }) {

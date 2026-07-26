@@ -5,6 +5,7 @@ import { ArrowLeft, Bookmark, ChevronLeft, ChevronRight, CornerUpRight, Download
 import { CommentsPanel } from "./comments-panel";
 import { ReportCanvasState } from "./report-canvas-state";
 import { ReportControl } from "./report-control";
+import { SubscriptionsPanel } from "./subscriptions-panel";
 import { ReportVisual } from "./report-visual";
 import { captureReportCanvas, downloadReportImage, downloadReportPdf, downloadReportPowerPoint, type ReportPageCapture } from "@/lib/report-export";
 import { applyReportFilters, drillthroughTargets, resolveReportCanvasState, resolveVisualInteractionRows, visualData, visualHierarchy, visualInteractionMode, type VisualInteractionSelection } from "@/lib/reporting";
@@ -30,7 +31,7 @@ function applyFilterOverrides(filters: ReportFilterDefinition[], overrides: Filt
   });
 }
 
-export function ReportDashboard({ report, dataset, records, canComment }: { report: Report; dataset: Dataset; records: Record<string, unknown>[]; canComment: boolean }) {
+export function ReportDashboard({ report, dataset, records, canComment, userEmail }: { report: Report; dataset: Dataset; records: Record<string, unknown>[]; canComment: boolean; userEmail: string }) {
   const [typedRecords, setTypedRecords] = useState(() => records as unknown as ManufacturingRecord[]);
   const defaultFilters = useMemo<Filters>(() => {
     const dates = typedRecords.map((row) => row.RecordDate).sort();
@@ -307,7 +308,7 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
   const dataRows = dataVisual ? interactionRowsFor(dataVisual.id) : undefined;
   const drillRows = drillVisual ? interactionRowsFor(drillVisual.id) : undefined;
 
-  return <main className={`report-page ${presentationMode ? "presentation-mode" : ""}`} style={reportThemeStyle(report)} data-report-theme={report.theme?.name}>
+  return <main className={`report-page ${presentationMode ? "presentation-mode" : ""}`} style={reportThemeStyle(report)} data-report-theme={report.theme?.name} data-client-ready={Boolean(browserLoadedAt)}>
     {presentationMode && <div className="presentation-toolbar" role="toolbar" aria-label="Presentation navigation"><strong>{report.name}</strong><span>{page.name} · {visiblePages.findIndex((item) => item.id === page.id) + 1} / {visiblePages.length}</span><button className="icon-button" aria-label="Previous report page" onClick={() => setActivePageId(visiblePages[(visiblePages.findIndex((item) => item.id === page.id) - 1 + visiblePages.length) % visiblePages.length]?.id ?? page.id)}><ChevronLeft size={16} /></button><button className="icon-button" aria-label="Next report page" onClick={() => setActivePageId(visiblePages[(visiblePages.findIndex((item) => item.id === page.id) + 1) % visiblePages.length]?.id ?? page.id)}><ChevronRight size={16} /></button><button className="button" onClick={exitPresentation}><X size={14} /> Exit</button></div>}
     <nav className="report-tabs" aria-label="Report pages">
       {drillHistory.length > 0 && <button className="report-tab drillthrough-back" onClick={returnFromDrillthrough}><ArrowLeft size={13} /> Back</button>}
@@ -325,6 +326,7 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
         <button className="button" onClick={() => exportData("xlsx")}><Download size={14} /> Excel</button>
         <div className="export-menu-wrap"><button className={`button ${exportMenu ? "active" : ""}`} aria-expanded={exportMenu} aria-haspopup="menu" disabled={Boolean(exportBusy)} onClick={() => setExportMenu((current) => !current)}><FileImage size={14} /> {exportBusy ? "Exporting…" : "Export"}</button>{exportMenu && <div className="export-menu" role="menu" aria-label="Report export formats"><button role="menuitem" onClick={() => void exportReport("png")}><FileImage size={14} /><span><strong>PNG image</strong><small>Current report page</small></span></button><button role="menuitem" onClick={() => void exportReport("pdf")}><FileText size={14} /><span><strong>PDF document</strong><small>All visible pages</small></span></button><button role="menuitem" onClick={() => void exportReport("pptx")}><Presentation size={14} /><span><strong>PowerPoint</strong><small>One slide per visible page</small></span></button></div>}</div>
         <button className="button" onClick={() => void enterPresentation()}><MonitorPlay size={14} /> Present</button>
+        <SubscriptionsPanel reportId={report.id} userEmail={userEmail} onPreview={(format) => exportReport(format)} />
         {canComment && <CommentsPanel reportId={report.id} />}
       </div>
     </div>
