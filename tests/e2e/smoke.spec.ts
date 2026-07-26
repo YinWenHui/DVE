@@ -32,6 +32,12 @@ test("mock administrator opens the seeded application and uses report controls",
   await expect(page.locator(".report-page")).toHaveAttribute("data-client-ready", "true");
   await expect(page.getByText("Daily Report")).toBeVisible();
   await expect(page.getByText("Actual by Line")).toBeVisible();
+  const factoryMap = page.locator('[data-visual-title="Actual by Factory Location"]');
+  await expect(factoryMap.locator(".offline-map")).toBeVisible();
+  await expect(factoryMap.locator('.offline-map [role="button"]')).toHaveCount(3);
+  await factoryMap.getByRole("button", { name: /Chon Buri:/ }).click();
+  await expect(page.locator(".filter-summary")).toContainText("Chon Buri");
+  await factoryMap.getByRole("button", { name: /Chon Buri:/ }).click();
   await expect(
     page.locator('[data-visual-title="Achievement"] article'),
   ).toHaveAttribute("data-conditional-data-color", "#18a66a");
@@ -464,6 +470,17 @@ test("mock administrator opens the seeded application and uses report controls",
   await expect(page.getByLabel("Value field 2")).toHaveValue("ActualQty");
   await expect(page.getByLabel("Sort visual by")).toHaveValue("ActualQty");
   await expect(page.getByLabel("Sort visual direction")).toHaveValue("desc");
+  await page
+    .getByRole("button", { name: "Move Actual by Factory Location" })
+    .dispatchEvent("click");
+  await page.getByRole("button", { name: "Build" }).dispatchEvent("click");
+  await expect(page.getByLabel("Map location field")).toHaveValue("Province");
+  await expect(page.getByLabel("Map latitude field")).toHaveValue("Latitude");
+  await expect(page.getByLabel("Map longitude field")).toHaveValue("Longitude");
+  await expect(page.getByLabel("Map value field")).toHaveValue("ActualQty");
+  await page
+    .getByRole("button", { name: "Move Actual by Line" })
+    .dispatchEvent("click");
   await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
   const highOutputRule = page.locator('[data-rule-id="cf-1-line-high"]');
   await expect(highOutputRule.getByLabel("Conditional field 1")).toHaveValue(

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import GridLayout, { type Layout } from "react-grid-layout";
-import { Ban, BarChart3, Bookmark, Check, ChevronDown, ChevronUp, Clipboard, Contrast, Copy, CreditCard, Eye, EyeOff, Filter, ImageIcon, Layers3, LineChart, ListTree, Monitor, MousePointerClick, Navigation, Paintbrush, Plus, Redo2, RotateCcw, Save, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Square, Table2, Trash2, Type, Undo2, WandSparkles } from "lucide-react";
+import { Ban, BarChart3, Bookmark, Check, ChevronDown, ChevronUp, Clipboard, Contrast, Copy, CreditCard, Eye, EyeOff, Filter, ImageIcon, Layers3, LineChart, ListTree, MapPinned, Monitor, MousePointerClick, Navigation, Paintbrush, Plus, Redo2, RotateCcw, Save, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Square, Table2, Trash2, Type, Undo2, WandSparkles } from "lucide-react";
 import { ReportControl } from "@/components/report/report-control";
 import { ReportVisual } from "@/components/report/report-visual";
 import { createMobileLayout, nudgeLayoutItem, snapReportLayout } from "@/lib/report-authoring";
@@ -21,6 +21,7 @@ const tools: Array<{ type: VisualType; label: string; icon: typeof BarChart3 }> 
   { type: "area", label: "Area chart", icon: LineChart },
   { type: "combo", label: "Line + column", icon: LineChart },
   { type: "scatter", label: "Scatter plot", icon: BarChart3 },
+  { type: "map", label: "Map", icon: MapPinned },
   { type: "doughnut", label: "Doughnut", icon: BarChart3 },
   { type: "treemap", label: "Treemap", icon: Layers3 },
   { type: "funnel", label: "Funnel", icon: Layers3 },
@@ -153,10 +154,11 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
     const id = crypto.randomUUID();
     const measure = measures[0]?.key as VisualDefinition["measure"];
     const secondaryMeasure = measures[1]?.key as VisualDefinition["secondaryMeasure"];
-    const dimension = dimensions[0]?.key as VisualDefinition["dimension"];
+    const defaultDimension = type === "map" ? dimensions.find((field) => field.semanticType === "geographic" && field.dataType === "string") ?? dimensions[0] : dimensions[0];
+    const dimension = defaultDimension?.key as VisualDefinition["dimension"];
     const nextY = page.visuals.reduce((maximum, visual) => Math.max(maximum, visual.y + visual.h), 0);
     const needsSecondary = ["stackedBar", "stackedColumn", "combo", "scatter"].includes(type);
-    const supportsHierarchy = !["kpi", "gauge", "table", "matrix", "slicer", "scatter"].includes(type);
+    const supportsHierarchy = !["kpi", "gauge", "table", "matrix", "slicer", "scatter", "map"].includes(type);
     const compact = type === "kpi";
     const visual: VisualDefinition = {
       id,
@@ -175,6 +177,12 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
       interaction: { crossFilter: true, tooltips: true },
       filters: [],
       tabular: type === "table" ? { columns: structuredClone(defaultTableColumns), rowLimit: 100, stripedRows: false, density: "standard" } : type === "matrix" ? { columns: structuredClone(defaultMatrixColumns), matrixRows: ["Line", "Model"], showTotals: true, stripedRows: false, density: "standard" } : undefined,
+      geographic: type === "map" ? {
+        locationField: dimension,
+        latitudeField: dimensions.find((field) => field.key.toLocaleLowerCase().includes("latitude"))?.key as keyof ManufacturingRecord | undefined,
+        longitudeField: dimensions.find((field) => field.key.toLocaleLowerCase().includes("longitude"))?.key as keyof ManufacturingRecord | undefined,
+        mapName: "thailand",
+      } : undefined,
     };
     updatePage({ ...page, visuals: [...page.visuals, visual] });
     setSelectedId(id);
@@ -580,11 +588,12 @@ function BuildSettings({ selected, dimensions, measures, updateSelected, onDelet
   const addValueField = () => { const field = measures.find((item) => !valueFields.includes(item.key as keyof ManufacturingRecord)); if (field) updateValueFields([...valueFields, field.key as keyof ManufacturingRecord]); };
   const addTooltipField = () => { const field = allFields.find((item) => !tooltipFields.includes(item.key as keyof ManufacturingRecord)); if (field) updateSelected({ tooltipFields: [...tooltipFields, field.key as keyof ManufacturingRecord] }); };
   const isTabular = selected.type === "table" || selected.type === "matrix";
+  const isMap = selected.type === "map";
   return <div className="form-stack">
     <div className="panel-header"><div><h3>Build visual</h3><p>{tools.find((item) => item.type === selected.type)?.label}</p></div><button className="icon-button danger" aria-label="Delete visual" onClick={onDelete}><Trash2 size={14} /></button></div>
     <label>Title<input value={selected.title} onChange={(event) => updateSelected({ title: event.target.value })} /></label>
     <label>Visual type<select value={selected.type} onChange={(event) => updateSelected({ type: event.target.value as VisualType })}>{tools.map((item) => <option value={item.type} key={item.type}>{item.label}</option>)}</select></label>
-    {isTabular ? <TabularBuildSettings selected={selected} fields={allFields} dimensions={dimensions} updateSelected={updateSelected} /> : <><label>Category / X-axis<select value={selected.dimension ?? ""} onChange={(event) => updateDimension(event.target.value)}><option value="">None</option>{dimensions.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
+    {isTabular ? <TabularBuildSettings selected={selected} fields={allFields} dimensions={dimensions} updateSelected={updateSelected} /> : isMap ? <MapBuildSettings selected={selected} dimensions={dimensions} measures={measures} updateSelected={updateSelected} /> : <><label>Category / X-axis<select value={selected.dimension ?? ""} onChange={(event) => updateDimension(event.target.value)}><option value="">None</option>{dimensions.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
     {supportsHierarchy && <div className="settings-group hierarchy-settings"><strong>Drill hierarchy</strong><p>Click a category to drill when drill mode is active.</p>
       <label>Drill level 2<select value={hierarchy[1] ?? ""} disabled={!selected.dimension} onChange={(event) => updateHierarchyLevel(1, event.target.value)}><option value="">None</option>{dimensions.filter((field) => field.key !== selected.dimension).map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
       <label>Drill level 3<select value={hierarchy[2] ?? ""} disabled={hierarchy.length < 2} onChange={(event) => updateHierarchyLevel(2, event.target.value)}><option value="">None</option>{dimensions.filter((field) => !hierarchy.slice(0, 2).includes(field.key as keyof ManufacturingRecord)).map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
@@ -597,6 +606,22 @@ function BuildSettings({ selected, dimensions, measures, updateSelected, onDelet
     <label>Number format<select value={selected.format ?? "number"} onChange={(event) => updateSelected({ format: event.target.value as VisualDefinition["format"] })}><option value="number">Number</option><option value="percent">Percentage</option></select></label>
     <div className="settings-group"><strong>Sort</strong><label>Sort by<select aria-label="Sort visual by" value={selected.sort?.field ?? ""} onChange={(event) => updateSelected({ sort: event.target.value ? { field: event.target.value as keyof ManufacturingRecord, direction: selected.sort?.direction ?? "asc" } : undefined })}><option value="">Default order</option>{[...dimensions, ...measures].map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label><label>Direction<select aria-label="Sort visual direction" value={selected.sort?.direction ?? "asc"} disabled={!selected.sort} onChange={(event) => selected.sort && updateSelected({ sort: { ...selected.sort, direction: event.target.value as "asc" | "desc" } })}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label></div></>}
     {selected.type === "kpi" && <KpiTargetSettings selected={selected} measures={measures} updateSelected={updateSelected} />}
+  </div>;
+}
+
+function MapBuildSettings({ selected, dimensions, measures, updateSelected }: { selected: VisualDefinition; dimensions: Dataset["fields"]; measures: Dataset["fields"]; updateSelected: (changes: Partial<VisualDefinition>) => void }) {
+  const geographic = selected.geographic ?? { mapName: "thailand" as const };
+  const locations = dimensions.filter((field) => field.dataType === "string");
+  const coordinates = dimensions.filter((field) => field.dataType === "decimal" || field.dataType === "integer");
+  const changeGeographic = (changes: NonNullable<VisualDefinition["geographic"]>) => updateSelected({ geographic: { ...geographic, ...changes, mapName: "thailand" } });
+  return <div className="form-stack map-build-settings">
+    <div className="settings-group"><strong>Offline geography</strong><p>Uses the bundled Thailand boundary. No coordinates or report data leave this browser.</p>
+      <label>Location<select aria-label="Map location field" value={geographic.locationField ?? selected.dimension ?? ""} onChange={(event) => { const locationField = event.target.value as keyof ManufacturingRecord; updateSelected({ dimension: locationField, geographic: { ...geographic, locationField, mapName: "thailand" } }); }}><option value="">None</option>{locations.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
+      <label>Latitude<select aria-label="Map latitude field" value={geographic.latitudeField ?? ""} onChange={(event) => changeGeographic({ latitudeField: event.target.value as keyof ManufacturingRecord || undefined })}><option value="">None</option>{coordinates.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
+      <label>Longitude<select aria-label="Map longitude field" value={geographic.longitudeField ?? ""} onChange={(event) => changeGeographic({ longitudeField: event.target.value as keyof ManufacturingRecord || undefined })}><option value="">None</option>{coordinates.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
+    </div>
+    <label>Marker size<select aria-label="Map value field" value={selected.measure ?? ""} onChange={(event) => updateSelected({ measure: event.target.value as keyof ManufacturingRecord || undefined, valueFields: event.target.value ? [event.target.value as keyof ManufacturingRecord] : [] })}><option value="">Count of locations</option>{measures.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
+    <label>Aggregation<select aria-label="Map aggregation" value={selected.aggregation ?? "sum"} onChange={(event) => updateSelected({ aggregation: event.target.value as Aggregation })}>{["sum", "average", "minimum", "maximum", "count", "distinctCount"].map((value) => <option key={value}>{value}</option>)}</select></label>
   </div>;
 }
 

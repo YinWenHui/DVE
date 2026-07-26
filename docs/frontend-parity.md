@@ -13,7 +13,7 @@ Hosting, production security hardening, service packaging, centralized monitorin
 | Capability | Current Digital Verse behavior |
 | --- | --- |
 | Report consumption | Multi-page reports, responsive canvas, application navigation, freshness context, theme/fullscreen, loading skeletons, and actionable empty/no-result/stale/offline/error states |
-| Visual catalog | KPI with constant/measure targets and variance, bar, column, stacked bar/column, line, area, combo, scatter, doughnut, treemap, funnel, waterfall, gauge, configurable table, configurable matrix, slicer |
+| Visual catalog | KPI with constant/measure targets and variance, bar, column, stacked bar/column, line, area, combo, scatter, doughnut, treemap, funnel, waterfall, gauge, configurable table, configurable matrix, slicer, and a bundled offline geographic map with location/latitude/longitude/value wells |
 | Filtering | Viewer filters plus persisted report-, page-, and visual-level basic/advanced filters, AND/OR clauses, Top/Bottom N, rolling/current relative dates, locked and hidden constraints, and authored visual sort order |
 | Interactions | Persisted source-to-target filter/highlight/none editing, hierarchy drill down/up/expand controls, hidden drillthrough targets with carried filter context/back navigation, authored page/bookmark/back/reset buttons, page and bookmark navigators, slicers, tooltips, reset/clear, focus mode, show underlying data |
 | Personalization | Persisted report-owned bookmarks with page/filter state, browser-local personal bookmarks, favorites, recent reports, per-device open counts, searchable/sortable workspace discovery, and certified/promoted content labels |
@@ -25,11 +25,7 @@ Hosting, production security hardening, service packaging, centralized monitorin
 
 ## Remaining front-end phases
 
-### Front-end phase C — authoring depth
-
-- Geographic visuals after the approved offline map strategy is selected.
-
-Subscription configuration and preview delivery are complete in the pilot front end. Automatic unattended email execution remains part of the deferred production worker/hosting phase described in the delivery boundary.
+None. The scoped front-end parity milestone is implemented. Subscription configuration and preview delivery are complete in the pilot front end; automatic unattended email execution remains part of the deferred production worker/hosting phase described in the delivery boundary.
 
 ## Acceptance rule
 

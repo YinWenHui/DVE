@@ -75,6 +75,9 @@ export interface ManufacturingRecord {
   BusinessUnit: string;
   Customer: string;
   Line: string;
+  Province: string;
+  Latitude: number;
+  Longitude: number;
   Model: string;
   PartNumber: string;
   PlanQty: number;
@@ -97,6 +100,7 @@ export type VisualType =
   | "area"
   | "combo"
   | "scatter"
+  | "map"
   | "doughnut"
   | "treemap"
   | "funnel"
@@ -263,6 +267,13 @@ export interface TabularVisualOptions {
   density?: "compact" | "standard" | "comfortable";
 }
 
+export interface GeographicVisualOptions {
+  locationField?: keyof ManufacturingRecord;
+  latitudeField?: keyof ManufacturingRecord;
+  longitudeField?: keyof ManufacturingRecord;
+  mapName?: "thailand";
+}
+
 export interface VisualDefinition {
   id: string;
   type: VisualType;
@@ -289,6 +300,7 @@ export interface VisualDefinition {
   conditionalFormatting?: VisualConditionalFormatting;
   target?: KpiTargetDefinition;
   tabular?: TabularVisualOptions;
+  geographic?: GeographicVisualOptions;
   hidden?: boolean;
 }
 

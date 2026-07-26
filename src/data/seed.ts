@@ -46,20 +46,28 @@ export const manufacturingFields: DatasetField[] = [
   field("BusinessUnit", "Business Unit", "string", "dimension", "none", 3),
   field("Customer", "Customer", "string", "dimension", "none", 4),
   field("Line", "Line", "string", "dimension", "none", 5),
-  field("Model", "Model", "string", "dimension", "none", 6),
-  field("PartNumber", "Part Number", "string", "identifier", "none", 7),
-  field("PlanQty", "Plan", "integer", "measure", "sum", 8, "#,##0"),
-  field("ActualQty", "Actual", "integer", "measure", "sum", 9, "#,##0"),
-  field("GapQty", "Gap", "integer", "measure", "sum", 10, "#,##0"),
-  field("AchievementRate", "Achievement Rate", "decimal", "measure", "average", 11, "0.0%"),
-  field("YieldRate", "Yield Rate", "decimal", "measure", "average", 12, "0.0%"),
-  field("DefectQty", "Defect Quantity", "integer", "measure", "sum", 13, "#,##0"),
-  field("PendingQty", "Pending Quantity", "integer", "measure", "sum", 14, "#,##0"),
-  field("UpdatedAt", "Source Updated", "datetime", "date", "maximum", 15, "dd MMM yyyy HH:mm"),
+  field("Province", "Province", "string", "geographic", "none", 6),
+  field("Latitude", "Latitude", "decimal", "geographic", "average", 7, "0.0000"),
+  field("Longitude", "Longitude", "decimal", "geographic", "average", 8, "0.0000"),
+  field("Model", "Model", "string", "dimension", "none", 9),
+  field("PartNumber", "Part Number", "string", "identifier", "none", 10),
+  field("PlanQty", "Plan", "integer", "measure", "sum", 11, "#,##0"),
+  field("ActualQty", "Actual", "integer", "measure", "sum", 12, "#,##0"),
+  field("GapQty", "Gap", "integer", "measure", "sum", 13, "#,##0"),
+  field("AchievementRate", "Achievement Rate", "decimal", "measure", "average", 14, "0.0%"),
+  field("YieldRate", "Yield Rate", "decimal", "measure", "average", 15, "0.0%"),
+  field("DefectQty", "Defect Quantity", "integer", "measure", "sum", 16, "#,##0"),
+  field("PendingQty", "Pending Quantity", "integer", "measure", "sum", 17, "#,##0"),
+  field("UpdatedAt", "Source Updated", "datetime", "date", "maximum", 18, "dd MMM yyyy HH:mm"),
 ];
 
 export function createSyntheticRecords(days = 35): ManufacturingRecord[] {
   const lines = ["Line A", "Line B", "Line C"] as const;
+  const sites = [
+    { province: "Chon Buri", latitude: 13.3611, longitude: 100.9847 },
+    { province: "Rayong", latitude: 12.6814, longitude: 101.2816 },
+    { province: "Ayutthaya", latitude: 14.3532, longitude: 100.5689 },
+  ] as const;
   const records: ManufacturingRecord[] = [];
   for (let dayOffset = days - 1; dayOffset >= 0; dayOffset -= 1) {
     const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dayOffset));
@@ -78,6 +86,9 @@ export function createSyntheticRecords(days = 35): ManufacturingRecord[] {
           BusinessUnit: lineIndex === 2 ? "Assembly" : "Production",
           Customer: customer,
           Line: line,
+          Province: sites[lineIndex]!.province,
+          Latitude: sites[lineIndex]!.latitude,
+          Longitude: sites[lineIndex]!.longitude,
           Model: model,
           PartNumber: model === "Model X100" ? "PN-X100-A" : "PN-X200-B",
           PlanQty: plan,
@@ -142,6 +153,7 @@ const baseVisuals = (variant: number): VisualDefinition[] => [
     { id: `cf-${variant}-pending-bar`, field: "PendingQty", operator: "greaterThanOrEqual", value: 0, target: "dataBar", color: "#5c73e6" },
   ] } },
   { id: `v-${variant}-slicer`, type: "slicer", title: "Line slicer", x: 0, y: 12, w: 4, h: 3, dimension: "Line" },
+  { id: `v-${variant}-map`, type: "map", title: "Actual by Factory Location", x: 4, y: 12, w: 8, h: 5, dimension: "Province", measure: "ActualQty", aggregation: "sum", geographic: { locationField: "Province", latitudeField: "Latitude", longitudeField: "Longitude", mapName: "thailand" }, tooltipFields: ["PlanQty", "AchievementRate"] },
 ];
 
 const baseInteractions = (variant: number, withKpis: boolean): VisualInteractionDefinition[] => withKpis ? [
@@ -204,24 +216,24 @@ export const seedReports: Report[] = reportNames.map(([name, slug, description],
   pages: [
     { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, canvas: { backgroundColor: "#eef2f8", showGrid: true, snapToGrid: true, gridSize: 1 }, mobileLayout: index === 0 ? { enabled: true, items: [
       { itemId: "v-1-plan", x: 0, y: 0, w: 1, h: 2 }, { itemId: "v-1-actual", x: 1, y: 0, w: 1, h: 2 }, { itemId: "v-1-gap", x: 0, y: 2, w: 1, h: 2 }, { itemId: "v-1-achievement", x: 1, y: 2, w: 1, h: 2 }, { itemId: "v-1-yield", x: 0, y: 4, w: 1, h: 2 }, { itemId: "v-1-pending", x: 1, y: 4, w: 1, h: 2 },
-      { itemId: "v-1-bar", x: 0, y: 6, w: 2, h: 5 }, { itemId: "v-1-line", x: 0, y: 11, w: 2, h: 5 }, { itemId: "v-1-donut", x: 0, y: 16, w: 2, h: 5 }, { itemId: "v-1-matrix", x: 0, y: 21, w: 2, h: 5 }, { itemId: "v-1-slicer", x: 0, y: 26, w: 2, h: 3 },
-      { itemId: "control-1-pages", x: 0, y: 29, w: 2, h: 1 }, { itemId: "control-1-bookmarks", x: 0, y: 30, w: 2, h: 1 }, { itemId: "control-1-detail", x: 0, y: 31, w: 2, h: 1 }, { itemId: "control-1-note", x: 0, y: 32, w: 2, h: 2 }, { itemId: "control-1-shape", x: 0, y: 34, w: 1, h: 2, hidden: true }, { itemId: "control-1-image", x: 1, y: 34, w: 1, h: 2 },
+      { itemId: "v-1-bar", x: 0, y: 6, w: 2, h: 5 }, { itemId: "v-1-line", x: 0, y: 11, w: 2, h: 5 }, { itemId: "v-1-donut", x: 0, y: 16, w: 2, h: 5 }, { itemId: "v-1-matrix", x: 0, y: 21, w: 2, h: 5 }, { itemId: "v-1-slicer", x: 0, y: 26, w: 2, h: 3 }, { itemId: "v-1-map", x: 0, y: 29, w: 2, h: 5 },
+      { itemId: "control-1-pages", x: 0, y: 34, w: 2, h: 1 }, { itemId: "control-1-bookmarks", x: 0, y: 35, w: 2, h: 1 }, { itemId: "control-1-detail", x: 0, y: 36, w: 2, h: 1 }, { itemId: "control-1-note", x: 0, y: 37, w: 2, h: 2 }, { itemId: "control-1-shape", x: 0, y: 39, w: 1, h: 2, hidden: true }, { itemId: "control-1-image", x: 1, y: 39, w: 1, h: 2 },
     ] } : undefined, filters: [{ id: `filter-${index + 1}-top-model-context`, field: "Model", operator: "equals", value: "", mode: "topN", topN: { direction: "top", count: 2, byMeasure: "ActualQty", aggregation: "sum" } }], visuals: baseVisuals(index + 1), interactions: baseInteractions(index + 1, true), controls: [
-      { id: `control-${index + 1}-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 15, w: 6, h: 1 },
-      { id: `control-${index + 1}-bookmarks`, type: "bookmarkNavigator", title: "Saved views", x: 6, y: 15, w: 6, h: 1 },
-      { id: `control-${index + 1}-detail`, type: "button", title: "Open detail", x: 0, y: 16, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-detail` } },
+      { id: `control-${index + 1}-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 17, w: 6, h: 1 },
+      { id: `control-${index + 1}-bookmarks`, type: "bookmarkNavigator", title: "Saved views", x: 6, y: 17, w: 6, h: 1 },
+      { id: `control-${index + 1}-detail`, type: "button", title: "Open detail", x: 0, y: 18, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-detail` } },
       ...(index === 0 ? [
-        { id: "control-1-note", type: "textBox" as const, title: "Operations note", content: "DC line performance is refreshed every five minutes. Select a line or model to explore the current production context.", x: 0, y: 17, w: 6, h: 2, display: { backgroundColor: "#ffffff", textColor: "#172033", borderColor: "#cfd8e8", borderWidth: 1, borderRadius: 10, fontSize: 13, fontWeight: "semibold" as const, textAlignment: "left" as const, verticalAlignment: "center" as const } },
-        { id: "control-1-shape", type: "shape" as const, title: "Operations marker", altText: "Blue decorative ellipse", x: 6, y: 17, w: 2, h: 2, display: { backgroundColor: "#5c73e6", borderColor: "#4057c7", borderWidth: 2, borderRadius: 40, shape: "ellipse" as const } },
-        { id: "control-1-image", type: "image" as const, title: "Digital Verse mark", altText: "Digital Verse DV mark", imageUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 120'%3E%3Crect width='320' height='120' rx='24' fill='%235c73e6'/%3E%3Ctext x='160' y='74' text-anchor='middle' font-family='Arial' font-size='42' font-weight='700' fill='white'%3EDigital Verse%3C/text%3E%3C/svg%3E", x: 8, y: 17, w: 4, h: 2, display: { backgroundColor: "#ffffff", borderColor: "#cfd8e8", borderWidth: 1, borderRadius: 10, imageFit: "contain" as const } },
+        { id: "control-1-note", type: "textBox" as const, title: "Operations note", content: "DC line performance is refreshed every five minutes. Select a line or model to explore the current production context.", x: 0, y: 19, w: 6, h: 2, display: { backgroundColor: "#ffffff", textColor: "#172033", borderColor: "#cfd8e8", borderWidth: 1, borderRadius: 10, fontSize: 13, fontWeight: "semibold" as const, textAlignment: "left" as const, verticalAlignment: "center" as const } },
+        { id: "control-1-shape", type: "shape" as const, title: "Operations marker", altText: "Blue decorative ellipse", x: 6, y: 19, w: 2, h: 2, display: { backgroundColor: "#5c73e6", borderColor: "#4057c7", borderWidth: 2, borderRadius: 40, shape: "ellipse" as const } },
+        { id: "control-1-image", type: "image" as const, title: "Digital Verse mark", altText: "Digital Verse DV mark", imageUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 120'%3E%3Crect width='320' height='120' rx='24' fill='%235c73e6'/%3E%3Ctext x='160' y='74' text-anchor='middle' font-family='Arial' font-size='42' font-weight='700' fill='white'%3EDigital Verse%3C/text%3E%3C/svg%3E", x: 8, y: 19, w: 4, h: 2, display: { backgroundColor: "#ffffff", borderColor: "#cfd8e8", borderWidth: 1, borderRadius: 10, imageFit: "contain" as const } },
       ] : []),
     ] },
     { id: `page-${index + 1}-detail`, name: "Detail", ordinal: 1, filters: [{ id: `filter-${index + 1}-valid-customer`, field: "Customer", operator: "contains", value: "Customer", mode: "advanced", clauses: [{ operator: "contains", value: "Customer" }, { operator: "isNotBlank" }], logicalOperator: "and", locked: true }], visuals: baseVisuals(index + 11).slice(6), interactions: baseInteractions(index + 11, false), controls: [
-      { id: `control-${index + 1}-detail-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 15, w: 6, h: 1 },
-      { id: `control-${index + 1}-overview`, type: "button", title: "Back to overview", x: 6, y: 15, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-overview` } },
+      { id: `control-${index + 1}-detail-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 17, w: 6, h: 1 },
+      { id: `control-${index + 1}-overview`, type: "button", title: "Back to overview", x: 6, y: 17, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-overview` } },
     ] },
     { id: `page-${index + 1}-line-detail`, name: "Line detail", ordinal: 2, hidden: true, drillthrough: { fields: ["Line", "Model"], keepAllFilters: true }, visuals: baseVisuals(index + 21).slice(6), interactions: baseInteractions(index + 21, false), controls: [
-      { id: `control-${index + 1}-drill-back`, type: "button", title: "Return to source", x: 0, y: 15, w: 3, h: 1, action: { type: "back" } },
+      { id: `control-${index + 1}-drill-back`, type: "button", title: "Return to source", x: 0, y: 17, w: 3, h: 1, action: { type: "back" } },
     ] },
   ],
 }));

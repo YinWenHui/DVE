@@ -3,6 +3,7 @@
 import { memo, useCallback, useMemo, useState, type CSSProperties, type MouseEvent } from "react";
 import { ChevronUp, ChevronsDown, CornerUpRight, GitBranch, Maximize2, TableProperties } from "lucide-react";
 import { EChart } from "./echart";
+import { OfflineMap } from "./offline-map";
 import { ProductionMatrix, ProductionTable } from "./data-table";
 import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, resolveConditionalFormatting, resolveKpiTarget, sortVisualRows, visualHierarchy, type VisualDrillSelection } from "@/lib/reporting";
 import type { ManufacturingRecord, VisualDefinition } from "@/types";
@@ -35,7 +36,7 @@ export const ReportVisual = memo(function ReportVisual({ visual, rows, highlight
 
   const level = Math.min(drill.level, Math.max(0, hierarchy.length - 1));
   const drillField = hierarchy[level] ?? visual.dimension;
-  const supportsDrill = Boolean(drillField && visual.measure && hierarchy.length > 1 && !["gauge", "scatter", "slicer"].includes(visual.type));
+  const supportsDrill = Boolean(drillField && visual.measure && hierarchy.length > 1 && !["gauge", "scatter", "slicer", "map"].includes(visual.type));
   const canAdvance = supportsDrill && level < hierarchy.length - 1;
   const scopedRows = useMemo(() => sortVisualRows(visual, applyReportFilters(rows, visual.filters)), [rows, visual]);
   const drilledRows = useMemo(() => applyVisualDrillPath(scopedRows, drill.path), [drill.path, scopedRows]);
@@ -78,6 +79,11 @@ export const ReportVisual = memo(function ReportVisual({ visual, rows, highlight
     onDrillthrough={onDrillthrough ? () => onDrillthrough(actionVisual) : undefined}
     drill={supportsDrill ? { level, canAdvance, enabled: drillMode, onToggle: () => setDrillMode((current) => !current), onUp: drillUp, onExpand: expandNext } : undefined}
   />;
+
+  if (visual.type === "map") return <article className="visual-card interactive geographic-card" style={style} aria-label={visual.title} data-map-source="bundled">
+    <VisualHeader visual={visual} meta={selectedValue ? `${selectedValue} selected` : "Click a location to interact"} actions={actions} />
+    <div className="visual-body"><OfflineMap visual={visual} rows={drilledRows} selectedValue={selectedValue} onSelect={onSelect} /></div>
+  </article>;
 
   if (visual.type === "kpi" && visual.measure) {
     const value = aggregateRows(drilledRows, visual.measure, visual.aggregation);

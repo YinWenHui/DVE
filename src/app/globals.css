@@ -420,6 +420,24 @@ html[data-presentation-mode="true"] .app-shell { display: block; min-width: 0; b
 .usage-chart-row i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--secondary)); }
 .usage-chart-row strong { text-align: right; font-size: .65rem; }
 
+.geographic-card .visual-body { min-height: 0; overflow: hidden; }
+.offline-map { display: flex; height: 100%; min-height: 220px; flex-direction: column; gap: 6px; }
+.offline-map svg { width: 100%; min-height: 0; flex: 1; overflow: visible; }
+.offline-map-land { fill: #f8fbf5; stroke: #91a89c; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.offline-map-grid line { stroke: #8eb9cd; stroke-width: .7; stroke-dasharray: 3 6; opacity: .3; vector-effect: non-scaling-stroke; }
+.offline-map-label { fill: #607887; font-size: 17px; font-weight: 800; letter-spacing: 4px; opacity: .55; }
+.offline-map-marker { cursor: pointer; outline: none; }
+.offline-map-marker-halo { fill: var(--visual-accent, #5c73e6); opacity: .16; transition: opacity .15s ease; }
+.offline-map-marker-core { fill: var(--visual-accent, #5c73e6); stroke: #fff; stroke-width: 3; vector-effect: non-scaling-stroke; transition: opacity .15s ease, stroke-width .15s ease; }
+.offline-map-marker text { fill: #172033; font-size: 13px; font-weight: 750; paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; }
+.offline-map-marker-halo, .offline-map-marker text { pointer-events: none; }
+.offline-map-marker:hover .offline-map-marker-halo, .offline-map-marker:focus .offline-map-marker-halo, .offline-map-marker.selected .offline-map-marker-halo { opacity: .34; }
+.offline-map-marker:focus .offline-map-marker-core, .offline-map-marker.selected .offline-map-marker-core { stroke: #172033; stroke-width: 5; }
+.offline-map-legend { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; }
+.offline-map-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.offline-map-legend i { width: 10px; height: 10px; border-radius: 50%; background: var(--visual-accent, #5c73e6); box-shadow: 0 0 0 4px color-mix(in srgb, var(--visual-accent, #5c73e6) 18%, transparent); }
+.map-build-settings .settings-group p { margin: 4px 0 8px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+
 .admin-shell { min-height: 100vh; display: grid; grid-template-columns: 246px 1fr; background: var(--bg); }
 .admin-sidebar { position: sticky; top: 0; height: 100vh; padding: 18px 12px; background: var(--nav); color: var(--nav-text); }
 .admin-brand { display: flex; align-items: center; gap: 11px; padding: 2px 6px 20px; border-bottom: 1px solid rgba(255,255,255,.08); }
