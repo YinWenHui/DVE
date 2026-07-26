@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import GridLayout, { type Layout } from "react-grid-layout";
+import { Responsive, WidthProvider, type Layout } from "react-grid-layout";
 import { Download, FilterX, RotateCcw } from "lucide-react";
 import type { EChartsOption } from "echarts";
 import { EChart } from "./echart";
@@ -11,11 +11,14 @@ import type { Dataset, ManufacturingRecord, Report, VisualDefinition } from "@/t
 
 interface Filters { from: string; to: string; Line: string; Model: string; Customer: string; Shift: string }
 const numberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
 export function ReportDashboard({ report, dataset, records, canComment }: { report: Report; dataset: Dataset; records: Record<string, unknown>[]; canComment: boolean }) {
-  const typedRecords = records as unknown as ManufacturingRecord[];
-  const dates = typedRecords.map((row) => row.RecordDate).sort();
-  const defaultFilters: Filters = { from: dates.at(-30) ?? dates[0] ?? "", to: dates.at(-1) ?? "", Line: "", Model: "", Customer: "", Shift: "" };
+  const typedRecords = useMemo(() => records as unknown as ManufacturingRecord[], [records]);
+  const defaultFilters = useMemo<Filters>(() => {
+    const dates = typedRecords.map((row) => row.RecordDate).sort();
+    return { from: dates.at(-30) ?? dates[0] ?? "", to: dates.at(-1) ?? "", Line: "", Model: "", Customer: "", Shift: "" };
+  }, [typedRecords]);
   const [filters, setFilters] = useState(defaultFilters);
   const [browserLoadedAt, setBrowserLoadedAt] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
@@ -49,7 +52,8 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     anchor.href = url; anchor.download = `${report.slug}.${format}`; anchor.click(); URL.revokeObjectURL(url);
   }
 
-  const layout: Layout[] = page.visuals.map((visual) => ({ i: visual.id, x: visual.x, y: visual.y, w: visual.w, h: visual.h, minW: visual.type === "kpi" ? 2 : 3, minH: 2 }));
+  const layout = useMemo<Layout[]>(() => page.visuals.map((visual) => ({ i: visual.id, x: visual.x, y: visual.y, w: visual.w, h: visual.h, minH: 2 })), [page.visuals]);
+  const layouts = useMemo(() => ({ lg: layout }), [layout]);
   return <main className="report-page">
     <nav className="report-tabs" aria-label="Report pages">{report.pages.map((item, index) => <button className={`report-tab ${index === pageIndex ? "active" : ""}`} key={item.id} onClick={() => setPageIndex(index)}>{item.name}</button>)}</nav>
     <div className="filter-bar">
@@ -66,14 +70,14 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     <div className="source-strip"><span>Source updated <strong>{new Date(dataset.sourceUpdatedAt).toLocaleString()}</strong></span><span>Dataset imported <strong>{new Date(dataset.importedAt).toLocaleString()}</strong></span><span>Browser loaded <strong>{browserLoadedAt ? new Date(browserLoadedAt).toLocaleString() : "Loading…"}</strong></span><span>Rows in context <strong>{filtered.length.toLocaleString()}</strong></span></div>
     {dataset.status !== "healthy" && <div className="status-banner">Data freshness is {dataset.status}. The previous validated dataset version remains active.</div>}
     <section className="report-canvas" data-report-canvas>
-      <GridLayout className="layout" layout={layout} cols={12} rowHeight={54} width={1320} margin={[10, 10]} isDraggable={false} isResizable={false}>
-        {page.visuals.map((visual) => <div key={visual.id}><VisualCard visual={visual} rows={filtered} activeFilters={filters} onSelect={(value) => selectCategory(visual.dimension, value)} setFilter={(value) => selectCategory(visual.dimension, value)} /></div>)}
-      </GridLayout>
+      <ResponsiveGridLayout className="layout" layouts={layouts} breakpoints={{ lg: 1100, md: 850, sm: 620, xs: 420, xxs: 0 }} cols={{ lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 }} rowHeight={54} margin={[10, 10]} isDraggable={false} isResizable={false} measureBeforeMount>
+        {page.visuals.map((visual) => <div key={visual.id}><VisualCard visual={visual} rows={filtered} activeFilters={filters} onSelect={selectCategory} /></div>)}
+      </ResponsiveGridLayout>
     </section>
   </main>;
 }
 
-function VisualCard({ visual, rows, activeFilters, onSelect, setFilter }: { visual: VisualDefinition; rows: ManufacturingRecord[]; activeFilters: Filters; onSelect: (value: string) => void; setFilter: (value: string) => void }) {
+function VisualCard({ visual, rows, activeFilters, onSelect }: { visual: VisualDefinition; rows: ManufacturingRecord[]; activeFilters: Filters; onSelect: (field: keyof ManufacturingRecord | undefined, value: string) => void }) {
   if (visual.type === "kpi" && visual.measure) {
     const value = calculate(rows, visual.measure, visual.aggregation ?? "sum");
     return <article className="visual-card kpi-card"><span>{visual.title}</span><strong>{visual.format === "percent" ? `${(value * 100).toFixed(1)}%` : numberFormat.format(value)}</strong><small>{rows.length ? "Within current filter context" : "No matching records"}</small></article>;
@@ -83,10 +87,15 @@ function VisualCard({ visual, rows, activeFilters, onSelect, setFilter }: { visu
   if (visual.type === "slicer" && visual.dimension) {
     const values = [...new Set(rows.map((row) => String(row[visual.dimension as keyof ManufacturingRecord])))].sort();
     const selected = visual.dimension === "Line" || visual.dimension === "Model" || visual.dimension === "Customer" || visual.dimension === "Shift" ? activeFilters[visual.dimension] : "";
-    return <article className="visual-card"><div className="visual-card-header"><h3>{visual.title}</h3><span>Shared filter</span></div><div className="visual-body"><div className="builder-tool-list">{values.map((value) => <button className={`builder-tool ${selected === value ? "active" : ""}`} key={value} onClick={() => setFilter(value)}>{value}</button>)}</div></div></article>;
+    return <article className="visual-card"><div className="visual-card-header"><h3>{visual.title}</h3><span>Shared filter</span></div><div className="visual-body"><div className="builder-tool-list">{values.map((value) => <button className={`builder-tool ${selected === value ? "active" : ""}`} key={value} onClick={() => onSelect(visual.dimension, value)}>{value}</button>)}</div></div></article>;
   }
-  const option = chartOption(visual, rows);
-  return <article className="visual-card interactive"><div className="visual-card-header"><h3>{visual.title}</h3><span>Click a category to filter</span></div><div className="visual-body"><EChart option={option} onSelect={onSelect} /></div></article>;
+  return <ChartVisual visual={visual} rows={rows} onSelect={onSelect} />;
+}
+
+function ChartVisual({ visual, rows, onSelect }: { visual: VisualDefinition; rows: ManufacturingRecord[]; onSelect: (field: keyof ManufacturingRecord | undefined, value: string) => void }) {
+  const option = useMemo(() => chartOption(visual, rows), [rows, visual]);
+  const select = useCallback((value: string) => onSelect(visual.dimension, value), [onSelect, visual.dimension]);
+  return <article className="visual-card interactive"><div className="visual-card-header"><h3>{visual.title}</h3><span>Click a category to filter</span></div><div className="visual-body"><EChart option={option} onSelect={select} /></div></article>;
 }
 
 function calculate(rows: ManufacturingRecord[], field: keyof ManufacturingRecord, aggregation: VisualDefinition["aggregation"]): number {

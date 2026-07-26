@@ -27,7 +27,12 @@ export function AppShell({ app, reports, activeReport, dataset, user, children }
   const [query, setQuery] = useState("");
   const [seconds, setSeconds] = useState(dataset.refreshIntervalMinutes * 60);
   const [refreshing, setRefreshing] = useState(false);
-  const [browserLoadedAt, setBrowserLoadedAt] = useState(() => new Date().toISOString());
+  const [browserLoadedAt, setBrowserLoadedAt] = useState("");
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setBrowserLoadedAt(new Date().toISOString()));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     const interval = window.setInterval(() => setSeconds((value) => value <= 1 ? dataset.refreshIntervalMinutes * 60 : value - 1), 1_000);
@@ -111,7 +116,7 @@ export function AppShell({ app, reports, activeReport, dataset, user, children }
             <div className="freshness-pill"><i className="freshness-dot" /><div className="freshness-copy"><strong>{dataset.status}</strong><span>Refresh in {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</span></div></div>
             <button className="icon-button" title="Refresh now" onClick={refresh} disabled={refreshing}><RefreshCw size={16} className={refreshing ? "spin" : ""} /></button>
             <button className="icon-button" title="Fullscreen report" onClick={fullscreen}><Fullscreen size={16} /></button>
-            <button className="icon-button" title="Toggle theme" onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>{resolvedTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}</button>
+            <button className="icon-button" title="Toggle theme" onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}><span className="theme-icon theme-icon-light"><Moon size={16} /></span><span className="theme-icon theme-icon-dark"><Sun size={16} /></span></button>
             <button className="icon-button" title="Sign out" onClick={logout}><LogOut size={16} /></button>
           </div>
         </header>
