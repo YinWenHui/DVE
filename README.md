@@ -10,7 +10,7 @@ The repository currently contains a functional Phase 1 prototype with synthetic 
 - Safe local preview authentication that is unavailable in production and does not use a default password.
 - A seeded **Digital Verse Demo** app with five navigation groups, ten reports, and audience-aware visibility.
 - Seventeen metadata-driven visuals: KPI, bar, column, stacked bar/column, line, area, combo, scatter, doughnut, treemap, funnel, waterfall, gauge, table, matrix, and slicer.
-- Viewer filters plus persisted report/page/visual filters, chart cross-filtering, focus mode, show data, personal bookmarks, report pages, fullscreen, light/dark themes, and distinct freshness timestamps.
+- Viewer filters plus persisted report/page/visual filters, chart cross-filtering, focus mode, show data, personal bookmarks, report pages, fullscreen, light/dark themes, distinct freshness timestamps, and dedicated loading/empty/no-result/stale/offline/error states.
 - Excel/CSV upload, preview, type detection, semantic field editing, retention metadata, and a SQL Server connection test.
 - Live-preview report and application builders with draggable/resizable layouts, data field wells, visual formatting/interactions, page duplication/hiding, grouped content, audience preview, draft/publish states, and validation.
 - Secure structured query validation; the browser cannot submit SQL or unregistered identifiers.

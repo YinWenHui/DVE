@@ -12,7 +12,7 @@ Hosting, production security hardening, service packaging, centralized monitorin
 
 | Capability | Current Digital Verse behavior |
 | --- | --- |
-| Report consumption | Multi-page reports, responsive canvas, application navigation, freshness context, theme and fullscreen |
+| Report consumption | Multi-page reports, responsive canvas, application navigation, freshness context, theme/fullscreen, loading skeletons, and actionable empty/no-result/stale/offline/error states |
 | Visual catalog | KPI, bar, column, stacked bar/column, line, area, combo, scatter, doughnut, treemap, funnel, waterfall, gauge, table, matrix, slicer |
 | Filtering | Viewer filters plus persisted report-, page-, and visual-level filters |
 | Interactions | Chart cross-filter toggles, slicers, tooltips, reset/clear, focus mode, show underlying data |

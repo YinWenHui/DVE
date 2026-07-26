@@ -25,6 +25,10 @@ test("mock administrator opens the seeded application and uses report controls",
   await expect(page.getByRole("dialog", { name: /Actual by Line — underlying data/ })).toBeVisible(); await page.getByRole("button", { name: "Close dialog" }).dispatchEvent("click");
   await page.getByRole("button", { name: "Focus Actual by Line" }).dispatchEvent("click");
   await expect(page.getByRole("dialog", { name: /Actual by Line — focus mode/ })).toBeVisible(); await page.getByRole("button", { name: "Close dialog" }).dispatchEvent("click");
+  await page.getByRole("button", { name: "Filters", exact: true }).dispatchEvent("click");
+  await filtersPane.getByLabel("Date from").evaluate((element) => { const input = element as HTMLInputElement; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(input, "2099-01-01"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+  await expect(page.getByRole("heading", { name: "No matching data" })).toBeVisible(); await page.getByRole("button", { name: "Reset filters" }).dispatchEvent("click");
+  await expect(page.getByText("Actual by Line").first()).toBeVisible(); await filtersPane.getByLabel("Close filters").dispatchEvent("click");
   const reportViewport = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
   expect(reportViewport.scrollWidth).toBeLessThanOrEqual(reportViewport.clientWidth + 1);
   await page.goto("/admin/alerts");

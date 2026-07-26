@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Responsive, WidthProvider, type Layout } from "react-grid-layout";
 import { Bookmark, Download, Filter, FilterX, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { CommentsPanel } from "./comments-panel";
+import { ReportCanvasState } from "./report-canvas-state";
 import { ReportVisual } from "./report-visual";
-import { applyReportFilters, visualData } from "@/lib/reporting";
+import { applyReportFilters, resolveReportCanvasState, visualData } from "@/lib/reporting";
 import type { Dataset, ManufacturingRecord, Report, VisualDefinition } from "@/types";
 
 interface Filters { from: string; to: string; Line: string; Model: string; Customer: string; Shift: string }
@@ -104,6 +105,7 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
   const layout = useMemo<Layout[]>(() => page.visuals.map((visual) => ({ i: visual.id, x: visual.x, y: visual.y, w: visual.w, h: visual.h, minH: 2 })), [page.visuals]);
   const layouts = useMemo(() => ({ lg: layout }), [layout]);
   const activeCount = [filters.from, filters.to, filters.Line, filters.Model, filters.Customer, filters.Shift].filter(Boolean).length;
+  const canvasState = resolveReportCanvasState({ datasetStatus: dataset.status, totalRows: typedRecords.length, metadataRows: metadataFiltered.length, filteredRows: filtered.length, visualCount: page.visuals.length });
 
   return <main className="report-page">
     <nav className="report-tabs" aria-label="Report pages">{visiblePages.map((item, index) => <button className={`report-tab ${index === pageIndex ? "active" : ""}`} key={item.id} onClick={() => setPageIndex(index)}>{item.name}</button>)}</nav>
@@ -122,12 +124,13 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     <div className="report-workspace">
       <div className="report-workspace-main">
         <div className="source-strip"><span>Source updated <strong>{new Date(freshness.sourceUpdatedAt).toLocaleString()}</strong></span><span>Dataset imported <strong>{new Date(freshness.importedAt).toLocaleString()}</strong></span><span>Browser loaded <strong>{browserLoadedAt ? new Date(browserLoadedAt).toLocaleString() : "Loading…"}</strong></span><span>Rows in context <strong>{filtered.length.toLocaleString()}</strong></span></div>
-        {dataset.status !== "healthy" && <div className="status-banner">Data freshness is {dataset.status}. The previous validated dataset version remains active.</div>}
-        <section className="report-canvas" data-report-canvas>
-          <ResponsiveGridLayout className="layout" layouts={layouts} breakpoints={{ lg: 1100, md: 850, sm: 620, xs: 420, xxs: 0 }} cols={{ lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 }} rowHeight={54} margin={[10, 10]} isDraggable={false} isResizable={false} measureBeforeMount>
-            {page.visuals.map((visual) => <div key={visual.id}><ReportVisual visual={visual} rows={filtered} activeFilters={filters} onSelect={selectCategory} onFocus={setFocusedVisual} onShowData={setDataVisual} /></div>)}
-          </ResponsiveGridLayout>
-        </section>
+        <ReportCanvasState state={canvasState} datasetStatus={dataset.status} onReset={() => setFilters(defaultFilters)}>
+          <section className="report-canvas" data-report-canvas>
+            <ResponsiveGridLayout className="layout" layouts={layouts} breakpoints={{ lg: 1100, md: 850, sm: 620, xs: 420, xxs: 0 }} cols={{ lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 }} rowHeight={54} margin={[10, 10]} isDraggable={false} isResizable={false} measureBeforeMount>
+              {page.visuals.map((visual) => <div key={visual.id}><ReportVisual visual={visual} rows={filtered} activeFilters={filters} onSelect={selectCategory} onFocus={setFocusedVisual} onShowData={setDataVisual} /></div>)}
+            </ResponsiveGridLayout>
+          </section>
+        </ReportCanvasState>
       </div>
       {pane === "filters" && <FiltersPane filters={filters} setFilters={setFilters} unique={unique} reportFilterCount={report.filters?.length ?? 0} pageFilterCount={page.filters?.length ?? 0} onClose={() => setPane(null)} />}
       {pane === "bookmarks" && <BookmarksPane bookmarks={bookmarks} name={bookmarkName} setName={setBookmarkName} onSave={saveBookmark} onApply={applyBookmark} onDelete={(id) => persistBookmarks(bookmarks.filter((item) => item.id !== id))} onClose={() => setPane(null)} />}

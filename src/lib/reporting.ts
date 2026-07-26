@@ -1,5 +1,24 @@
 import type { EChartsOption } from "echarts";
-import type { ManufacturingRecord, ReportFilterDefinition, VisualDefinition } from "@/types";
+import type { Dataset, ManufacturingRecord, ReportFilterDefinition, VisualDefinition } from "@/types";
+
+export type ReportCanvasState = "ready" | "stale" | "empty-report" | "no-data" | "no-metadata-results" | "no-results" | "offline" | "error";
+
+export function resolveReportCanvasState(input: {
+  datasetStatus: Dataset["status"];
+  totalRows: number;
+  metadataRows: number;
+  filteredRows: number;
+  visualCount: number;
+}): ReportCanvasState {
+  if (input.datasetStatus === "offline" && input.totalRows === 0) return "offline";
+  if (input.datasetStatus === "failed" && input.totalRows === 0) return "error";
+  if (input.visualCount === 0) return "empty-report";
+  if (input.totalRows === 0) return "no-data";
+  if (input.metadataRows === 0) return "no-metadata-results";
+  if (input.filteredRows === 0) return "no-results";
+  if (["refreshing", "delayed", "stale", "failed"].includes(input.datasetStatus)) return "stale";
+  return "ready";
+}
 
 export function aggregateRows(
   rows: ManufacturingRecord[],
