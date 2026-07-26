@@ -26,7 +26,7 @@ Hosting, production security hardening, service packaging, centralized monitorin
 
 ### Front-end phase C — authoring depth
 
-- Text boxes, shapes, images, buttons, KPI targets, and richer table/matrix column configuration.
+- Text boxes, shapes, images, KPI targets, and richer table/matrix column configuration.
 - Mobile layout authoring, accessibility inspection, keyboard editing, and high-contrast validation.
 - Geographic visuals after the approved offline map strategy is selected.
 
