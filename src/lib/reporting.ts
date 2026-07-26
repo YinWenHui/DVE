@@ -1,11 +1,50 @@
 import type { EChartsOption } from "echarts";
-import type { Dataset, ManufacturingRecord, ReportFilterDefinition, ReportPage, VisualDefinition } from "@/types";
+import type { Dataset, ManufacturingRecord, ReportFilterDefinition, ReportPage, VisualDefinition, VisualInteractionMode } from "@/types";
 
 export type ReportCanvasState = "ready" | "stale" | "empty-report" | "no-data" | "no-metadata-results" | "no-results" | "offline" | "error";
 
 export interface VisualDrillSelection {
   field: keyof ManufacturingRecord;
   value: string;
+}
+
+export interface VisualInteractionSelection {
+  sourceVisualId: string;
+  field: keyof ManufacturingRecord;
+  value: string;
+}
+
+export interface ResolvedVisualInteractionRows {
+  rows: ManufacturingRecord[];
+  highlightRows?: ManufacturingRecord[];
+  filterSelections: VisualInteractionSelection[];
+  highlightSelections: VisualInteractionSelection[];
+}
+
+export function visualInteractionMode(page: ReportPage, sourceVisualId: string, targetVisualId: string): VisualInteractionMode {
+  if (sourceVisualId === targetVisualId) return "none";
+  const configured = page.interactions?.find((interaction) => interaction.sourceVisualId === sourceVisualId && interaction.targetVisualId === targetVisualId);
+  if (configured) return configured.mode;
+  const source = page.visuals.find((visual) => visual.id === sourceVisualId);
+  return source?.interaction?.crossFilter === false ? "none" : "filter";
+}
+
+function applyVisualSelections(rows: ManufacturingRecord[], selections: VisualInteractionSelection[]): ManufacturingRecord[] {
+  if (!selections.length) return rows;
+  return rows.filter((row) => selections.every((selection) => String(row[selection.field] ?? "").toLocaleLowerCase() === selection.value.toLocaleLowerCase()));
+}
+
+export function resolveVisualInteractionRows(page: ReportPage, targetVisualId: string, rows: ManufacturingRecord[], selections: VisualInteractionSelection[]): ResolvedVisualInteractionRows {
+  const validSelections = selections.filter((selection) => page.visuals.some((visual) => visual.id === selection.sourceVisualId));
+  const filterSelections = validSelections.filter((selection) => visualInteractionMode(page, selection.sourceVisualId, targetVisualId) === "filter");
+  const highlightSelections = validSelections.filter((selection) => visualInteractionMode(page, selection.sourceVisualId, targetVisualId) === "highlight");
+  const filteredRows = applyVisualSelections(rows, filterSelections);
+  return {
+    rows: filteredRows,
+    highlightRows: highlightSelections.length ? applyVisualSelections(filteredRows, highlightSelections) : undefined,
+    filterSelections,
+    highlightSelections,
+  };
 }
 
 export function visualHierarchy(visual: VisualDefinition): Array<keyof ManufacturingRecord> {
@@ -101,8 +140,10 @@ export function visualData(visual: VisualDefinition, rows: ManufacturingRecord[]
   };
 }
 
-export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRecord[]): EChartsOption {
+export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRecord[], inputHighlightRows?: ManufacturingRecord[]): EChartsOption {
   const rows = applyReportFilters(inputRows, visual.filters);
+  const highlightRows = inputHighlightRows ? applyReportFilters(inputHighlightRows, visual.filters) : undefined;
+  const hasHighlight = highlightRows !== undefined;
   const accent = visual.display?.accentColor ?? "#5c73e6";
   const palette = [accent, "#2bb7c8", "#75b798", "#e2a45d", "#a78bfa", "#ef7181"];
   const showLabels = visual.display?.showDataLabels ?? false;
@@ -110,7 +151,7 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
   const tooltips = visual.interaction?.tooltips !== false;
 
   if (visual.type === "gauge" && visual.measure) {
-    const rawValue = aggregateRows(rows, visual.measure, visual.aggregation);
+    const rawValue = aggregateRows(highlightRows ?? rows, visual.measure, visual.aggregation);
     const percent = visual.format === "percent";
     const value = percent ? rawValue * 100 : rawValue;
     const maximum = percent ? 100 : Math.max(1, Math.ceil(value * 1.2));
@@ -130,7 +171,7 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
         axisLabel: { distance: 20, fontSize: 9 },
         pointer: { width: 4, length: "56%" },
         detail: { valueAnimation: true, formatter: percent ? "{value}%" : "{value}", fontSize: 19, offsetCenter: [0, "62%"] },
-        data: [{ value: Number(value.toFixed(percent ? 1 : 0)), name: visual.title }],
+        data: [{ value: Number(value.toFixed(percent ? 1 : 0)), name: hasHighlight ? `${visual.title} · highlighted` : visual.title }],
       }],
     };
   }
@@ -145,37 +186,54 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
       series: [{
         type: "scatter",
         symbolSize: 10,
+        itemStyle: hasHighlight ? { opacity: .2, color: "#94a3b8" } : undefined,
         data: rows.slice(0, 500).map((row) => ({
           name: visual.dimension ? String(row[visual.dimension]) : "Record",
           value: [Number(row[visual.measure as keyof ManufacturingRecord]), Number(row[visual.secondaryMeasure as keyof ManufacturingRecord])],
         })),
-      }],
+      }, ...(highlightRows ? [{
+        name: "Highlighted",
+        type: "scatter" as const,
+        symbolSize: 12,
+        data: highlightRows.slice(0, 500).map((row) => ({
+          name: visual.dimension ? String(row[visual.dimension]) : "Record",
+          value: [Number(row[visual.measure as keyof ManufacturingRecord]), Number(row[visual.secondaryMeasure as keyof ManufacturingRecord])],
+        })),
+      }] : [])],
     };
   }
 
   if (!visual.dimension || !visual.measure) return {};
   const primary = groupedValues(visual, rows);
   const secondary = visual.secondaryMeasure ? groupedValues(visual, rows, visual.secondaryMeasure).values : undefined;
+  const highlighted = highlightRows ? groupedValues(visual, highlightRows) : undefined;
+  const highlightedSecondary = highlightRows && visual.secondaryMeasure ? groupedValues(visual, highlightRows, visual.secondaryMeasure) : undefined;
+  const alignHighlight = (grouped: ReturnType<typeof groupedValues> | undefined) => {
+    const values = new Map(grouped?.categories.map((category, index) => [category, grouped.values[index]]) ?? []);
+    return primary.categories.map((category) => values.get(category) ?? 0);
+  };
+  const highlightedValues = alignHighlight(highlighted);
+  const highlightedSecondaryValues = alignHighlight(highlightedSecondary);
   const label = { show: showLabels, position: "top" as const, fontSize: 9 };
 
   if (visual.type === "doughnut") return {
     tooltip: { show: tooltips, trigger: "item" },
     legend: { show: showLegend, bottom: 0, type: "scroll" },
     color: palette,
-    series: [{ type: "pie", radius: ["45%", "72%"], center: ["50%", "44%"], data: primary.categories.map((name, index) => ({ name, value: primary.values[index] })), label: { show: showLabels } }],
+    series: [{ type: "pie", radius: ["45%", "72%"], center: ["50%", "44%"], data: primary.categories.map((name, index) => ({ name, value: primary.values[index], itemStyle: hasHighlight ? { opacity: .2, color: "#94a3b8" } : undefined })), label: { show: showLabels } }, ...(highlightRows ? [{ type: "pie" as const, radius: ["45%", "72%"], center: ["50%", "44%"], silent: true, data: primary.categories.map((name, index) => ({ name, value: highlightedValues[index] })).filter((item) => item.value !== 0), label: { show: false } }] : [])],
   };
 
   if (visual.type === "treemap") return {
     tooltip: { show: tooltips, trigger: "item" },
     color: palette,
-    series: [{ type: "treemap", roam: false, breadcrumb: { show: false }, label: { show: true, formatter: "{b}" }, data: primary.categories.map((name, index) => ({ name, value: primary.values[index] })) }],
+    series: [{ type: "treemap", roam: false, breadcrumb: { show: false }, label: { show: true, formatter: "{b}" }, data: primary.categories.map((name, index) => ({ name, value: primary.values[index], itemStyle: hasHighlight ? { opacity: highlightedValues[index] ? 1 : .2 } : undefined })) }],
   };
 
   if (visual.type === "funnel") return {
     tooltip: { show: tooltips, trigger: "item" },
     legend: { show: showLegend, bottom: 0, type: "scroll" },
     color: palette,
-    series: [{ type: "funnel", left: "12%", top: 10, bottom: 32, width: "76%", minSize: "8%", maxSize: "100%", sort: "descending", gap: 2, label: { show: showLabels, position: "inside" }, data: primary.categories.map((name, index) => ({ name, value: primary.values[index] })) }],
+    series: [{ type: "funnel", left: "12%", top: 10, bottom: 32, width: "76%", minSize: "8%", maxSize: "100%", sort: "descending", gap: 2, label: { show: showLabels, position: "inside" }, data: primary.categories.map((name, index) => ({ name, value: primary.values[index], itemStyle: hasHighlight ? { opacity: highlightedValues[index] ? 1 : .2 } : undefined })) }],
   };
 
   const horizontal = visual.type === "bar" || visual.type === "stackedBar";
@@ -192,15 +250,16 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
 
   if (visual.type === "line" || visual.type === "area") return {
     ...common,
-    series: [{ name: String(visual.measure), type: "line", smooth: true, data: primary.values, symbolSize: 5, label, areaStyle: visual.type === "area" ? { opacity: .18 } : undefined }],
+    series: [{ name: String(visual.measure), type: "line", smooth: true, data: primary.values, symbolSize: 5, label, lineStyle: hasHighlight ? { opacity: .2, color: "#94a3b8" } : undefined, itemStyle: hasHighlight ? { opacity: .2, color: "#94a3b8" } : undefined, areaStyle: visual.type === "area" ? { opacity: hasHighlight ? .06 : .18 } : undefined }, ...(highlightRows ? [{ name: "Highlighted", type: "line" as const, smooth: true, data: highlightedValues, symbolSize: 6, label, areaStyle: visual.type === "area" ? { opacity: .2 } : undefined }] : [])],
   };
 
   if (visual.type === "combo") return {
     ...common,
     yAxis: [{ ...valueAxis }, { ...valueAxis, splitLine: { show: false } }],
     series: [
-      { name: String(visual.measure), type: "bar", data: primary.values, barMaxWidth: 42, label },
-      { name: String(visual.secondaryMeasure ?? visual.measure), type: "line", yAxisIndex: 1, smooth: true, data: secondary ?? primary.values, label },
+      { name: String(visual.measure), type: "bar", data: primary.values, barMaxWidth: 42, label, itemStyle: hasHighlight ? { opacity: .2, color: "#94a3b8" } : undefined },
+      { name: String(visual.secondaryMeasure ?? visual.measure), type: "line", yAxisIndex: 1, smooth: true, data: secondary ?? primary.values, label, lineStyle: hasHighlight ? { opacity: .2, color: "#94a3b8" } : undefined },
+      ...(highlightRows ? [{ name: "Highlighted", type: "bar" as const, data: highlightedValues, barMaxWidth: 42, barGap: "-100%", label }, { name: "Highlighted secondary", type: "line" as const, yAxisIndex: 1, smooth: true, data: highlightedSecondaryValues, label }] : []),
     ],
   };
 
@@ -209,7 +268,7 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
     series: [{
       name: String(visual.measure),
       type: "bar",
-      data: primary.values.map((value) => ({ value, itemStyle: { color: value < 0 ? "#ef7181" : accent } })),
+      data: primary.values.map((value, index) => ({ value, itemStyle: { color: value < 0 ? "#ef7181" : accent, opacity: hasHighlight ? highlightedValues[index] ? 1 : .2 : 1 } })),
       barMaxWidth: 42,
       label,
     }],
@@ -219,8 +278,9 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
   return {
     ...common,
     series: [
-      { name: String(visual.measure), type: "bar", stack: stacked ? "total" : undefined, data: primary.values, barMaxWidth: 44, label, itemStyle: { borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0] } },
-      ...(stacked && secondary ? [{ name: String(visual.secondaryMeasure), type: "bar" as const, stack: "total", data: secondary, barMaxWidth: 44, label }] : []),
+      { name: String(visual.measure), type: "bar", stack: stacked ? "total" : undefined, data: primary.values, barMaxWidth: 44, label, itemStyle: { borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0], opacity: hasHighlight ? .2 : 1, color: hasHighlight ? "#94a3b8" : undefined } },
+      ...(stacked && secondary ? [{ name: String(visual.secondaryMeasure), type: "bar" as const, stack: "total", data: secondary, barMaxWidth: 44, label, itemStyle: hasHighlight ? { opacity: .2, color: "#cbd5e1" } : undefined }] : []),
+      ...(highlightRows ? [{ name: "Highlighted", type: "bar" as const, data: highlightedValues, barMaxWidth: 44, barGap: "-100%", label, itemStyle: { borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0] } }] : []),
     ],
   };
 }

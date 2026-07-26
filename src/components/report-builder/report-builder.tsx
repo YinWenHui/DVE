@@ -3,10 +3,10 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import GridLayout, { type Layout } from "react-grid-layout";
-import { BarChart3, Bookmark, Copy, CreditCard, Eye, EyeOff, Layers3, LineChart, MousePointerClick, Navigation, Paintbrush, Plus, RotateCcw, Save, SlidersHorizontal, Table2, Trash2 } from "lucide-react";
+import { Ban, BarChart3, Bookmark, Copy, CreditCard, Eye, EyeOff, Filter, Layers3, LineChart, MousePointerClick, Navigation, Paintbrush, Plus, RotateCcw, Save, SlidersHorizontal, Sparkles, Table2, Trash2 } from "lucide-react";
 import { ReportControl } from "@/components/report/report-control";
 import { ReportVisual } from "@/components/report/report-visual";
-import type { Aggregation, Dataset, ManufacturingRecord, Report, ReportActionType, ReportBookmarkDefinition, ReportControlDefinition, ReportControlType, ReportFilterDefinition, ReportPage, VisualDefinition, VisualType } from "@/types";
+import type { Aggregation, Dataset, ManufacturingRecord, Report, ReportActionType, ReportBookmarkDefinition, ReportControlDefinition, ReportControlType, ReportFilterDefinition, ReportPage, VisualDefinition, VisualInteractionMode, VisualType } from "@/types";
 
 const tools: Array<{ type: VisualType; label: string; icon: typeof BarChart3 }> = [
   { type: "kpi", label: "KPI card", icon: CreditCard },
@@ -152,6 +152,12 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
     updateSelected({ interaction: { ...selected.interaction, ...changes } });
   }
 
+  function updateVisualInteraction(sourceVisualId: string, targetVisualId: string, mode: VisualInteractionMode) {
+    if (!page || sourceVisualId === targetVisualId) return;
+    const remaining = (page.interactions ?? []).filter((interaction) => interaction.sourceVisualId !== sourceVisualId || interaction.targetVisualId !== targetVisualId);
+    updatePage({ ...page, interactions: [...remaining, { sourceVisualId, targetVisualId, mode }] });
+  }
+
   function changeLayout(next: Layout[]) {
     setPages((current) => {
       const currentPage = current[pageIndex];
@@ -180,7 +186,20 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
 
   function duplicatePage() {
     if (!page) return;
-    const next: ReportPage = { ...structuredClone(page), id: crypto.randomUUID(), name: `${page.name} copy`, ordinal: pages.length, visuals: page.visuals.map((visual) => ({ ...visual, id: crypto.randomUUID() })), controls: page.controls?.map((control) => ({ ...control, id: crypto.randomUUID() })) };
+    const visualIds = new Map(page.visuals.map((visual) => [visual.id, crypto.randomUUID()]));
+    const next: ReportPage = {
+      ...structuredClone(page),
+      id: crypto.randomUUID(),
+      name: `${page.name} copy`,
+      ordinal: pages.length,
+      visuals: page.visuals.map((visual) => ({ ...visual, id: visualIds.get(visual.id)! })),
+      controls: page.controls?.map((control) => ({ ...control, id: crypto.randomUUID() })),
+      interactions: page.interactions?.flatMap((interaction) => {
+        const sourceVisualId = visualIds.get(interaction.sourceVisualId);
+        const targetVisualId = visualIds.get(interaction.targetVisualId);
+        return sourceVisualId && targetVisualId ? [{ ...interaction, sourceVisualId, targetVisualId }] : [];
+      }),
+    };
     setPages((current) => [...current, next]);
     setPageIndex(pages.length);
     setSelectedId(undefined);
@@ -260,8 +279,8 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
       </section>
       <aside className="builder-pane builder-settings-pane">
         <div className="builder-settings-tabs"><button className={settingsTab === "build" ? "active" : ""} onClick={() => setSettingsTab("build")}><Layers3 size={14} /> Build</button><button className={settingsTab === "format" ? "active" : ""} onClick={() => setSettingsTab("format")}><Paintbrush size={14} /> Format</button><button className={settingsTab === "filters" ? "active" : ""} onClick={() => setSettingsTab("filters")}><SlidersHorizontal size={14} /> Filters</button></div>
-        {settingsTab === "build" && (selected ? <BuildSettings selected={selected} dimensions={dimensions} measures={measures} updateSelected={updateSelected} onDelete={() => { if (!page) return; updatePage({ ...page, visuals: page.visuals.filter((visual) => visual.id !== selected.id) }); setSelectedId(undefined); }} /> : selectedControl ? <ControlBuildSettings selected={selectedControl} pages={pages} bookmarks={bookmarks} updateSelected={updateSelectedControl} onDelete={() => { if (!page) return; updatePage({ ...page, controls: (page.controls ?? []).filter((control) => control.id !== selectedControl.id) }); setSelectedId(undefined); }} /> : selectedBookmark ? <BookmarkSettings selected={selectedBookmark} pages={pages} rows={previewRows} updateSelected={updateBookmark} onDelete={() => { setBookmarks((current) => current.filter((bookmark) => bookmark.id !== selectedBookmark.id)); setPages((current) => current.map((item) => ({ ...item, controls: item.controls?.map((control) => control.action?.type === "bookmark" && control.action.targetId === selectedBookmark.id ? { ...control, action: { type: "resetFilters" } } : control) }))); setSelectedBookmarkId(undefined); }} /> : <div className="empty-state compact">Select a visual, control, or report bookmark to configure it.</div>)}
-        {settingsTab === "format" && (selected ? <FormatSettings selected={selected} updateDisplay={updateDisplay} updateInteraction={updateInteraction} /> : selectedControl ? <ControlFormatSettings selected={selectedControl} updateSelected={updateSelectedControl} /> : <div className="empty-state compact">Select a visual or control to format its appearance and behavior.</div>)}
+        {settingsTab === "build" && (selected ? <BuildSettings selected={selected} dimensions={dimensions} measures={measures} updateSelected={updateSelected} onDelete={() => { if (!page) return; updatePage({ ...page, visuals: page.visuals.filter((visual) => visual.id !== selected.id), interactions: page.interactions?.filter((interaction) => interaction.sourceVisualId !== selected.id && interaction.targetVisualId !== selected.id) }); setSelectedId(undefined); }} /> : selectedControl ? <ControlBuildSettings selected={selectedControl} pages={pages} bookmarks={bookmarks} updateSelected={updateSelectedControl} onDelete={() => { if (!page) return; updatePage({ ...page, controls: (page.controls ?? []).filter((control) => control.id !== selectedControl.id) }); setSelectedId(undefined); }} /> : selectedBookmark ? <BookmarkSettings selected={selectedBookmark} pages={pages} rows={previewRows} updateSelected={updateBookmark} onDelete={() => { setBookmarks((current) => current.filter((bookmark) => bookmark.id !== selectedBookmark.id)); setPages((current) => current.map((item) => ({ ...item, controls: item.controls?.map((control) => control.action?.type === "bookmark" && control.action.targetId === selectedBookmark.id ? { ...control, action: { type: "resetFilters" } } : control) }))); setSelectedBookmarkId(undefined); }} /> : <div className="empty-state compact">Select a visual, control, or report bookmark to configure it.</div>)}
+        {settingsTab === "format" && (selected ? <FormatSettings selected={selected} page={page} updateDisplay={updateDisplay} updateInteraction={updateInteraction} updateVisualInteraction={updateVisualInteraction} /> : selectedControl ? <ControlFormatSettings selected={selectedControl} updateSelected={updateSelectedControl} /> : <div className="empty-state compact">Select a visual or control to format its appearance and behavior.</div>)}
         {settingsTab === "filters" && <div className="builder-filter-scopes">{selected && <FilterEditor title="Filters on this visual" filters={selected.filters ?? []} fields={filterFields} onChange={(filters) => updateSelected({ filters })} />}<FilterEditor title="Filters on this page" filters={page?.filters ?? []} fields={filterFields} onChange={(filters) => page && updatePage({ ...page, filters })} /><FilterEditor title="Filters on all pages" filters={reportFilters} fields={filterFields} onChange={setReportFilters} /></div>}
       </aside>
     </div>
@@ -301,10 +320,21 @@ function BuildSettings({ selected, dimensions, measures, updateSelected, onDelet
   </div>;
 }
 
-function FormatSettings({ selected, updateDisplay, updateInteraction }: { selected: VisualDefinition; updateDisplay: (changes: NonNullable<VisualDefinition["display"]>) => void; updateInteraction: (changes: NonNullable<VisualDefinition["interaction"]>) => void }) {
+function FormatSettings({ selected, page, updateDisplay, updateInteraction, updateVisualInteraction }: { selected: VisualDefinition; page: ReportPage; updateDisplay: (changes: NonNullable<VisualDefinition["display"]>) => void; updateInteraction: (changes: NonNullable<VisualDefinition["interaction"]>) => void; updateVisualInteraction: (sourceVisualId: string, targetVisualId: string, mode: VisualInteractionMode) => void }) {
   const display = selected.display ?? {};
   const interaction = selected.interaction ?? {};
-  return <div className="form-stack"><div className="panel-header"><div><h3>Format visual</h3><p>Appearance and behavior</p></div></div><div className="settings-group"><strong>Title and style</strong><label className="toggle-row"><span>Show title</span><input type="checkbox" checked={display.showTitle !== false} onChange={(event) => updateDisplay({ showTitle: event.target.checked })} /></label><label>Title alignment<select value={display.titleAlignment ?? "left"} onChange={(event) => updateDisplay({ titleAlignment: event.target.value as "left" | "center" | "right" })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label><label>Accent color<input type="color" value={display.accentColor ?? "#5c73e6"} onChange={(event) => updateDisplay({ accentColor: event.target.value })} /></label><label>Background<input type="color" value={display.backgroundColor ?? "#ffffff"} onChange={(event) => updateDisplay({ backgroundColor: event.target.value })} /></label><label>Corner radius<input type="range" min="0" max="24" value={display.borderRadius ?? 10} onChange={(event) => updateDisplay({ borderRadius: Number(event.target.value) })} /></label></div><div className="settings-group"><strong>Chart elements</strong><label className="toggle-row"><span>Legend</span><input type="checkbox" checked={display.showLegend ?? false} onChange={(event) => updateDisplay({ showLegend: event.target.checked })} /></label><label className="toggle-row"><span>Data labels</span><input type="checkbox" checked={display.showDataLabels ?? false} onChange={(event) => updateDisplay({ showDataLabels: event.target.checked })} /></label><label className="toggle-row"><span>Gridlines</span><input type="checkbox" checked={display.showGridlines !== false} onChange={(event) => updateDisplay({ showGridlines: event.target.checked })} /></label></div><div className="settings-group"><strong>Interactions</strong><label className="toggle-row"><span>Cross-filter</span><input type="checkbox" checked={interaction.crossFilter !== false} onChange={(event) => updateInteraction({ crossFilter: event.target.checked })} /></label><label className="toggle-row"><span>Tooltips</span><input type="checkbox" checked={interaction.tooltips !== false} onChange={(event) => updateInteraction({ tooltips: event.target.checked })} /></label></div></div>;
+  const targets = page.visuals.filter((visual) => visual.id !== selected.id);
+  return <div className="form-stack">
+    <div className="panel-header"><div><h3>Format visual</h3><p>Appearance and behavior</p></div></div>
+    <div className="settings-group"><strong>Title and style</strong><label className="toggle-row"><span>Show title</span><input type="checkbox" checked={display.showTitle !== false} onChange={(event) => updateDisplay({ showTitle: event.target.checked })} /></label><label>Title alignment<select value={display.titleAlignment ?? "left"} onChange={(event) => updateDisplay({ titleAlignment: event.target.value as "left" | "center" | "right" })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label><label>Accent color<input type="color" value={display.accentColor ?? "#5c73e6"} onChange={(event) => updateDisplay({ accentColor: event.target.value })} /></label><label>Background<input type="color" value={display.backgroundColor ?? "#ffffff"} onChange={(event) => updateDisplay({ backgroundColor: event.target.value })} /></label><label>Corner radius<input type="range" min="0" max="24" value={display.borderRadius ?? 10} onChange={(event) => updateDisplay({ borderRadius: Number(event.target.value) })} /></label></div>
+    <div className="settings-group"><strong>Chart elements</strong><label className="toggle-row"><span>Legend</span><input type="checkbox" checked={display.showLegend ?? false} onChange={(event) => updateDisplay({ showLegend: event.target.checked })} /></label><label className="toggle-row"><span>Data labels</span><input type="checkbox" checked={display.showDataLabels ?? false} onChange={(event) => updateDisplay({ showDataLabels: event.target.checked })} /></label><label className="toggle-row"><span>Gridlines</span><input type="checkbox" checked={display.showGridlines !== false} onChange={(event) => updateDisplay({ showGridlines: event.target.checked })} /></label></div>
+    <div className="settings-group"><strong>Source behavior</strong><label className="toggle-row"><span>Interactions enabled by default</span><input type="checkbox" checked={interaction.crossFilter !== false} onChange={(event) => updateInteraction({ crossFilter: event.target.checked })} /></label><label className="toggle-row"><span>Tooltips</span><input type="checkbox" checked={interaction.tooltips !== false} onChange={(event) => updateInteraction({ tooltips: event.target.checked })} /></label></div>
+    <div className="settings-group interaction-editor"><strong>Edit visual interactions</strong><p>Choose how a selection in <b>{selected.title}</b> affects every target.</p>{selected.dimension ? targets.map((target) => {
+      const configured = page.interactions?.find((item) => item.sourceVisualId === selected.id && item.targetVisualId === target.id);
+      const mode = configured?.mode ?? (interaction.crossFilter === false ? "none" : "filter");
+      return <div className="interaction-target-row" key={target.id}><span title={target.title}>{target.title}</span><div role="group" aria-label={`${selected.title} to ${target.title}`}><button type="button" className={mode === "filter" ? "active" : ""} aria-label={`Filter ${selected.title} to ${target.title}`} aria-pressed={mode === "filter"} title="Filter" onClick={() => updateVisualInteraction(selected.id, target.id, "filter")}><Filter size={13} /></button><button type="button" className={mode === "highlight" ? "active" : ""} aria-label={`Highlight ${selected.title} to ${target.title}`} aria-pressed={mode === "highlight"} title="Highlight" onClick={() => updateVisualInteraction(selected.id, target.id, "highlight")}><Sparkles size={13} /></button><button type="button" className={mode === "none" ? "active" : ""} aria-label={`No interaction from ${selected.title} to ${target.title}`} aria-pressed={mode === "none"} title="None" onClick={() => updateVisualInteraction(selected.id, target.id, "none")}><Ban size={13} /></button></div></div>;
+    }) : <p className="muted">Assign a category field before configuring this visual as an interaction source.</p>}</div>
+  </div>;
 }
 
 function ControlBuildSettings({ selected, pages, bookmarks, updateSelected, onDelete }: { selected: ReportControlDefinition; pages: ReportPage[]; bookmarks: ReportBookmarkDefinition[]; updateSelected: (changes: Partial<ReportControlDefinition>) => void; onDelete: () => void }) {

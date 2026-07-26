@@ -155,6 +155,14 @@ export interface DrillthroughDefinition {
   keepAllFilters?: boolean;
 }
 
+export type VisualInteractionMode = "filter" | "highlight" | "none";
+
+export interface VisualInteractionDefinition {
+  sourceVisualId: string;
+  targetVisualId: string;
+  mode: VisualInteractionMode;
+}
+
 export interface ReportBookmarkFilters {
   from?: string;
   to?: string;
@@ -207,6 +215,7 @@ export interface ReportPage {
   filters?: ReportFilterDefinition[];
   visuals: VisualDefinition[];
   controls?: ReportControlDefinition[];
+  interactions?: VisualInteractionDefinition[];
 }
 
 export interface Report {

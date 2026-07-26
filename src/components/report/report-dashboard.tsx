@@ -6,12 +6,12 @@ import { CommentsPanel } from "./comments-panel";
 import { ReportCanvasState } from "./report-canvas-state";
 import { ReportControl } from "./report-control";
 import { ReportVisual } from "./report-visual";
-import { applyReportFilters, drillthroughTargets, resolveReportCanvasState, visualData, visualHierarchy } from "@/lib/reporting";
+import { applyReportFilters, drillthroughTargets, resolveReportCanvasState, resolveVisualInteractionRows, visualData, visualHierarchy, visualInteractionMode, type VisualInteractionSelection } from "@/lib/reporting";
 import type { Dataset, ManufacturingRecord, Report, ReportActionDefinition, ReportBookmarkDefinition, ReportFilterDefinition, ReportPage, VisualDefinition } from "@/types";
 
 interface Filters { from: string; to: string; Line: string; Model: string; Customer: string; Shift: string }
-interface PersonalBookmark { id: string; name: string; pageId: string; filters: Filters; drillContext?: ReportFilterDefinition[]; createdAt: string }
-interface DrillHistoryEntry { pageId: string; filters: Filters; drillContext: ReportFilterDefinition[] }
+interface PersonalBookmark { id: string; name: string; pageId: string; filters: Filters; drillContext?: ReportFilterDefinition[]; visualSelections?: VisualInteractionSelection[]; createdAt: string }
+interface DrillHistoryEntry { pageId: string; filters: Filters; drillContext: ReportFilterDefinition[]; visualSelections: VisualInteractionSelection[] }
 type InsightPane = "filters" | "bookmarks" | null;
 
 export function ReportDashboard({ report, dataset, records, canComment }: { report: Report; dataset: Dataset; records: Record<string, unknown>[]; canComment: boolean }) {
@@ -37,6 +37,7 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
   const [drillVisual, setDrillVisual] = useState<VisualDefinition>();
   const [drillContext, setDrillContext] = useState<ReportFilterDefinition[]>([]);
   const [drillHistory, setDrillHistory] = useState<DrillHistoryEntry[]>([]);
+  const [visualSelections, setVisualSelections] = useState<VisualInteractionSelection[]>([]);
   const page = (report.pages.find((item) => item.id === activePageId) ?? visiblePages[0] ?? report.pages[0])!;
   const metadataFiltered = useMemo(() => applyReportFilters(typedRecords, [...(report.filters ?? []), ...(page.filters ?? []), ...drillContext]), [drillContext, page.filters, report.filters, typedRecords]);
   const filtered = useMemo(() => metadataFiltered.filter((row) =>
@@ -72,11 +73,14 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     return () => window.cancelAnimationFrame(frame);
   }, [report.id]);
 
-  const selectCategory = useCallback((field: keyof ManufacturingRecord | undefined, value: string) => {
-    if (field === "Line" || field === "Model" || field === "Customer" || field === "Shift") {
-      setActiveReportBookmarkId(undefined);
-      setFilters((current) => ({ ...current, [field]: current[field] === value ? "" : value }));
-    }
+  const selectCategory = useCallback((sourceVisualId: string, field: keyof ManufacturingRecord | undefined, value: string) => {
+    if (!field) return;
+    setActiveReportBookmarkId(undefined);
+    setVisualSelections((current) => {
+      const existing = current.find((selection) => selection.sourceVisualId === sourceVisualId);
+      const remaining = current.filter((selection) => selection.sourceVisualId !== sourceVisualId);
+      return existing?.field === field && existing.value === value ? remaining : [...remaining, { sourceVisualId, field, value }];
+    });
   }, []);
 
   function persistBookmarks(next: PersonalBookmark[]) {
@@ -86,20 +90,21 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
 
   function saveBookmark() {
     const name = bookmarkName.trim() || `Bookmark ${bookmarks.length + 1}`;
-    persistBookmarks([...bookmarks, { id: crypto.randomUUID(), name, pageId: page.id, filters: { ...filters }, drillContext: structuredClone(drillContext), createdAt: new Date().toISOString() }]);
+    persistBookmarks([...bookmarks, { id: crypto.randomUUID(), name, pageId: page.id, filters: { ...filters }, drillContext: structuredClone(drillContext), visualSelections: structuredClone(visualSelections), createdAt: new Date().toISOString() }]);
     setBookmarkName("");
   }
 
   function applyBookmark(bookmark: PersonalBookmark) {
     setFilters(bookmark.filters);
     setDrillContext(bookmark.drillContext ?? []);
+    setVisualSelections(bookmark.visualSelections ?? []);
     if (report.pages.some((item) => item.id === bookmark.pageId)) setActivePageId(bookmark.pageId);
     setDrillHistory([]);
     setActiveReportBookmarkId(undefined);
   }
 
   function applyReportBookmark(bookmark: ReportBookmarkDefinition, rememberCurrent = false) {
-    if (rememberCurrent) setDrillHistory((current) => [...current, { pageId: page.id, filters: { ...filters }, drillContext: structuredClone(drillContext) }]);
+    if (rememberCurrent) setDrillHistory((current) => [...current, { pageId: page.id, filters: { ...filters }, drillContext: structuredClone(drillContext), visualSelections: structuredClone(visualSelections) }]);
     setFilters({
       from: bookmark.filters?.from ?? defaultFilters.from,
       to: bookmark.filters?.to ?? defaultFilters.to,
@@ -110,6 +115,7 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     });
     if (report.pages.some((item) => item.id === bookmark.pageId)) setActivePageId(bookmark.pageId);
     setDrillContext([]);
+    setVisualSelections([]);
     if (!rememberCurrent) setDrillHistory([]);
     setDrillVisual(undefined);
     setActiveReportBookmarkId(bookmark.id);
@@ -123,12 +129,14 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     setFocusedVisual(undefined);
     setDataVisual(undefined);
     setActiveReportBookmarkId(undefined);
+    setVisualSelections([]);
   }
 
   function enterDrillthrough(target: ReportPage, field: keyof ManufacturingRecord, value: string) {
-    setDrillHistory((current) => [...current, { pageId: page.id, filters: { ...filters }, drillContext: structuredClone(drillContext) }]);
+    setDrillHistory((current) => [...current, { pageId: page.id, filters: { ...filters }, drillContext: structuredClone(drillContext), visualSelections: structuredClone(visualSelections) }]);
     if (target.drillthrough?.keepAllFilters === false) setFilters({ from: "", to: "", Line: "", Model: "", Customer: "", Shift: "" });
     setDrillContext([{ id: `drillthrough-${target.id}-${field}`, field, operator: "equals", value }]);
+    setVisualSelections([]);
     setActivePageId(target.id);
     setDrillVisual(undefined);
     setPane(null);
@@ -140,18 +148,20 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     setActivePageId(previous.pageId);
     setFilters(previous.filters);
     setDrillContext(previous.drillContext);
+    setVisualSelections(previous.visualSelections);
     setDrillHistory((current) => current.slice(0, -1));
   }
 
   function runReportAction(action: ReportActionDefinition) {
     if (action.type === "page" && action.targetId && report.pages.some((item) => item.id === action.targetId)) {
-      setDrillHistory((current) => [...current, { pageId: page.id, filters: { ...filters }, drillContext: structuredClone(drillContext) }]);
+      setDrillHistory((current) => [...current, { pageId: page.id, filters: { ...filters }, drillContext: structuredClone(drillContext), visualSelections: structuredClone(visualSelections) }]);
       setActivePageId(action.targetId);
       setDrillContext([]);
       setDrillVisual(undefined);
       setFocusedVisual(undefined);
       setDataVisual(undefined);
       setActiveReportBookmarkId(undefined);
+      setVisualSelections([]);
       return;
     }
     if (action.type === "bookmark" && action.targetId) {
@@ -168,6 +178,7 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
       setDrillContext([]);
       setDrillHistory([]);
       setActiveReportBookmarkId(undefined);
+      setVisualSelections([]);
     }
   }
 
@@ -185,8 +196,13 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     anchor.href = url; anchor.download = `${report.slug}.${format}`; anchor.click(); URL.revokeObjectURL(url);
   }
 
-  const activeCount = [filters.from, filters.to, filters.Line, filters.Model, filters.Customer, filters.Shift].filter(Boolean).length + drillContext.length;
+  const activeCount = [filters.from, filters.to, filters.Line, filters.Model, filters.Customer, filters.Shift].filter(Boolean).length + drillContext.length + visualSelections.length;
   const canvasState = resolveReportCanvasState({ datasetStatus: dataset.status, totalRows: typedRecords.length, metadataRows: metadataFiltered.length, filteredRows: filtered.length, visualCount: page.visuals.length + (page.controls?.length ?? 0) });
+  const interactionRowsFor = (visualId: string) => resolveVisualInteractionRows(page, visualId, filtered, visualSelections);
+  const canVisualInteract = (visualId: string) => page.visuals.some((target) => visualInteractionMode(page, visualId, target.id) !== "none");
+  const focusedRows = focusedVisual ? interactionRowsFor(focusedVisual.id) : undefined;
+  const dataRows = dataVisual ? interactionRowsFor(dataVisual.id) : undefined;
+  const drillRows = drillVisual ? interactionRowsFor(drillVisual.id) : undefined;
 
   return <main className="report-page">
     <nav className="report-tabs" aria-label="Report pages">
@@ -195,12 +211,12 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
       {page.hidden && <span className="report-tab drillthrough-current"><CornerUpRight size={13} /> {page.name}</span>}
     </nav>
     <div className="report-command-bar">
-      <div className="filter-summary"><Filter size={14} /><strong>{activeCount}</strong><span>active filters</span>{filters.Line && <i>{filters.Line}</i>}{filters.Model && <i>{filters.Model}</i>}</div>
+      <div className="filter-summary"><Filter size={14} /><strong>{activeCount}</strong><span>active filters</span>{filters.Line && <i>{filters.Line}</i>}{filters.Model && <i>{filters.Model}</i>}{visualSelections.map((selection) => <i key={selection.sourceVisualId}>{selection.value}</i>)}</div>
       <div className="report-command-actions">
         <button className={`button ${pane === "filters" ? "active" : ""}`} onClick={() => setPane((current) => current === "filters" ? null : "filters")}><Filter size={14} /> Filters</button>
         <button className={`button ${pane === "bookmarks" ? "active" : ""}`} onClick={() => setPane((current) => current === "bookmarks" ? null : "bookmarks")}><Bookmark size={14} /> Bookmarks</button>
-        <button className="button" title="Clear all filters" onClick={() => { setFilters({ ...defaultFilters, from: "", to: "" }); setActiveReportBookmarkId(undefined); }}><FilterX size={14} /> Clear</button>
-        <button className="button" title="Reset to the report default" onClick={() => { setFilters(defaultFilters); setActiveReportBookmarkId(undefined); }}><RotateCcw size={14} /> Reset</button>
+        <button className="button" title="Clear all filters" onClick={() => { setFilters({ ...defaultFilters, from: "", to: "" }); setVisualSelections([]); setActiveReportBookmarkId(undefined); }}><FilterX size={14} /> Clear</button>
+        <button className="button" title="Reset to the report default" onClick={() => { setFilters(defaultFilters); setVisualSelections([]); setActiveReportBookmarkId(undefined); }}><RotateCcw size={14} /> Reset</button>
         <button className="button" onClick={() => exportData("csv")}><Download size={14} /> CSV</button>
         <button className="button" onClick={() => exportData("xlsx")}><Download size={14} /> Excel</button>
         {canComment && <CommentsPanel reportId={report.id} />}
@@ -208,13 +224,15 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     </div>
     <div className="report-workspace">
       <div className="report-workspace-main">
-        <div className="source-strip"><span>Source updated <strong>{new Date(freshness.sourceUpdatedAt).toLocaleString()}</strong></span><span>Dataset imported <strong>{new Date(freshness.importedAt).toLocaleString()}</strong></span><span>Browser loaded <strong>{browserLoadedAt ? new Date(browserLoadedAt).toLocaleString() : "Loading…"}</strong></span><span>Rows in context <strong>{filtered.length.toLocaleString()}</strong></span></div>
-        <ReportCanvasState state={canvasState} datasetStatus={dataset.status} onReset={() => setFilters(defaultFilters)}>
+        <div className="source-strip"><span>Source updated <strong>{new Date(freshness.sourceUpdatedAt).toLocaleString()}</strong></span><span>Dataset imported <strong>{new Date(freshness.importedAt).toLocaleString()}</strong></span><span>Browser loaded <strong>{browserLoadedAt ? new Date(browserLoadedAt).toLocaleString() : "Loading…"}</strong></span><span>Rows in context <strong>{filtered.length.toLocaleString()}</strong></span>{visualSelections.length > 0 && <span>Visual selections <strong>{visualSelections.length}</strong></span>}</div>
+        <ReportCanvasState state={canvasState} datasetStatus={dataset.status} onReset={() => { setFilters(defaultFilters); setVisualSelections([]); }}>
           <section className="report-canvas" data-report-canvas>
             <div className="report-grid">
               {page.visuals.map((visual) => {
                 const canDrillthrough = visualHierarchy(visual).some((field) => drillthroughTargets(report.pages, page.id, field).length > 0);
-                return <div className="report-grid-item" style={reportGridStyle(visual)} key={visual.id}><ReportVisual visual={visual} rows={filtered} activeFilters={filters} onSelect={selectCategory} onFocus={setFocusedVisual} onShowData={setDataVisual} onDrillthrough={canDrillthrough ? setDrillVisual : undefined} /></div>;
+                const interactionRows = interactionRowsFor(visual.id);
+                const selectedValue = visualSelections.find((selection) => selection.sourceVisualId === visual.id)?.value;
+                return <div className="report-grid-item" style={reportGridStyle(visual)} data-visual-title={visual.title} data-filtered-rows={interactionRows.rows.length} data-highlighted-rows={interactionRows.highlightRows?.length} key={visual.id}><ReportVisual visual={visual} rows={interactionRows.rows} highlightRows={interactionRows.highlightRows} selectedValue={selectedValue} activeFilters={filters} onSelect={canVisualInteract(visual.id) ? (field, value) => selectCategory(visual.id, field, value) : undefined} onFocus={setFocusedVisual} onShowData={setDataVisual} onDrillthrough={canDrillthrough ? setDrillVisual : undefined} /></div>;
               })}
               {page.controls?.map((control) => <div className="report-grid-item" style={reportGridStyle(control)} key={control.id}><ReportControl control={control} pages={report.pages} bookmarks={report.bookmarks ?? []} activePageId={page.id} activeBookmarkId={activeReportBookmarkId} onAction={runReportAction} /></div>)}
             </div>
@@ -224,9 +242,9 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
       {pane === "filters" && <FiltersPane filters={filters} setFilters={(next) => { setFilters(next); setActiveReportBookmarkId(undefined); }} unique={unique} reportFilterCount={report.filters?.length ?? 0} pageFilterCount={page.filters?.length ?? 0} drillContext={drillContext} onClose={() => setPane(null)} />}
       {pane === "bookmarks" && <BookmarksPane reportBookmarks={report.bookmarks ?? []} activeReportBookmarkId={activeReportBookmarkId} onApplyReport={applyReportBookmark} bookmarks={bookmarks} name={bookmarkName} setName={setBookmarkName} onSave={saveBookmark} onApply={applyBookmark} onDelete={(id) => persistBookmarks(bookmarks.filter((item) => item.id !== id))} onClose={() => setPane(null)} />}
     </div>
-    {focusedVisual && <VisualDialog title={`${focusedVisual.title} — focus mode`} onClose={() => setFocusedVisual(undefined)}><ReportVisual visual={focusedVisual} rows={filtered} activeFilters={filters} onSelect={selectCategory} showActions={false} /></VisualDialog>}
-    {dataVisual && <VisualDialog title={`${dataVisual.title} — underlying data`} onClose={() => setDataVisual(undefined)}><VisualDataTable visual={dataVisual} rows={filtered} dataset={dataset} /></VisualDialog>}
-    {drillVisual && <DrillthroughDialog visual={drillVisual} rows={filtered} targets={drillthroughTargets(report.pages, page.id, drillVisual.dimension)} onEnter={enterDrillthrough} onClose={() => setDrillVisual(undefined)} />}
+    {focusedVisual && focusedRows && <VisualDialog title={`${focusedVisual.title} — focus mode`} onClose={() => setFocusedVisual(undefined)}><ReportVisual visual={focusedVisual} rows={focusedRows.rows} highlightRows={focusedRows.highlightRows} selectedValue={visualSelections.find((selection) => selection.sourceVisualId === focusedVisual.id)?.value} activeFilters={filters} onSelect={canVisualInteract(focusedVisual.id) ? (field, value) => selectCategory(focusedVisual.id, field, value) : undefined} showActions={false} /></VisualDialog>}
+    {dataVisual && dataRows && <VisualDialog title={`${dataVisual.title} — underlying data`} onClose={() => setDataVisual(undefined)}><VisualDataTable visual={dataVisual} rows={dataRows.rows} dataset={dataset} /></VisualDialog>}
+    {drillVisual && drillRows && <DrillthroughDialog visual={drillVisual} rows={drillRows.rows} targets={drillthroughTargets(report.pages, page.id, drillVisual.dimension)} onEnter={enterDrillthrough} onClose={() => setDrillVisual(undefined)} />}
   </main>;
 }
 

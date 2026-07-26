@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSyntheticRecords, seedReports } from "@/data/seed";
-import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, drillthroughTargets, resolveReportCanvasState, visualData, visualHierarchy } from "@/lib/reporting";
+import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, drillthroughTargets, resolveReportCanvasState, resolveVisualInteractionRows, visualData, visualHierarchy, visualInteractionMode } from "@/lib/reporting";
 import type { ReportPage, VisualDefinition } from "@/types";
 
 describe("report visual metadata", () => {
@@ -46,7 +46,37 @@ describe("report visual metadata", () => {
         if (control.action?.type === "page") expect(pageIds.has(control.action.targetId ?? "")).toBe(true);
         if (control.action?.type === "bookmark") expect(bookmarkIds.has(control.action.targetId ?? "")).toBe(true);
       }
+      for (const page of report.pages) {
+        const visualIds = new Set(page.visuals.map((visual) => visual.id));
+        expect(page.interactions?.every((interaction) => visualIds.has(interaction.sourceVisualId) && visualIds.has(interaction.targetVisualId))).toBe(true);
+      }
     }
+  });
+
+  it("resolves filter, highlight, and none independently for each visual pair", () => {
+    const page: ReportPage = {
+      id: "page",
+      name: "Overview",
+      ordinal: 0,
+      visuals: [
+        { id: "source", type: "slicer", title: "Line", x: 0, y: 0, w: 2, h: 2, dimension: "Line" },
+        { id: "filter", type: "kpi", title: "Filtered", x: 2, y: 0, w: 2, h: 2, measure: "ActualQty" },
+        { id: "highlight", type: "kpi", title: "Highlighted", x: 4, y: 0, w: 2, h: 2, measure: "ActualQty" },
+        { id: "none", type: "kpi", title: "Unchanged", x: 6, y: 0, w: 2, h: 2, measure: "ActualQty" },
+      ],
+      interactions: [
+        { sourceVisualId: "source", targetVisualId: "filter", mode: "filter" },
+        { sourceVisualId: "source", targetVisualId: "highlight", mode: "highlight" },
+        { sourceVisualId: "source", targetVisualId: "none", mode: "none" },
+      ],
+    };
+    const selection = [{ sourceVisualId: "source", field: "Line" as const, value: "Line A" }];
+    expect(visualInteractionMode(page, "source", "filter")).toBe("filter");
+    expect(resolveVisualInteractionRows(page, "filter", rows, selection).rows).toHaveLength(4);
+    const highlighted = resolveVisualInteractionRows(page, "highlight", rows, selection);
+    expect(highlighted.rows).toHaveLength(rows.length);
+    expect(highlighted.highlightRows).toHaveLength(4);
+    expect(resolveVisualInteractionRows(page, "none", rows, selection)).toMatchObject({ rows });
   });
 
   it("builds chart options for the expanded visual catalog", () => {
@@ -54,6 +84,7 @@ describe("report visual metadata", () => {
     expect(chartOption(base, rows)).toMatchObject({ series: [{ type: "treemap" }] });
     expect(chartOption({ ...base, type: "gauge", dimension: undefined }, rows)).toMatchObject({ series: [{ type: "gauge" }] });
     expect(chartOption({ ...base, type: "scatter", secondaryMeasure: "PlanQty" }, rows)).toMatchObject({ series: [{ type: "scatter" }] });
+    expect(chartOption({ ...base, type: "line" }, rows, rows.filter((row) => row.Line === "Line A"))).toMatchObject({ series: [{ type: "line" }, { name: "Highlighted", type: "line" }] });
   });
 
   it("resolves honest report canvas states without hiding a valid previous version", () => {

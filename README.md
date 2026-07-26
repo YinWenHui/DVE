@@ -14,7 +14,7 @@ The repository currently contains a functional Phase 1 prototype with synthetic 
 - Seventeen metadata-driven visuals: KPI, bar, column, stacked bar/column, line, area, combo, scatter, doughnut, treemap, funnel, waterfall, gauge, table, matrix, and slicer.
 - Viewer filters plus persisted report/page/visual filters, chart cross-filtering, persisted hierarchy drill down/up/expand controls, hidden drillthrough target pages with carried context and back navigation, report-owned and personal bookmarks, authored buttons and page/bookmark navigators, focus mode, show data, report pages, fullscreen, light/dark themes, distinct freshness timestamps, and dedicated loading/empty/no-result/stale/offline/error states.
 - Excel/CSV upload, preview, type detection, semantic field editing, retention metadata, and a SQL Server connection test.
-- Live-preview report and application builders with draggable/resizable layouts, data field wells, visual formatting/interactions, page duplication/hiding, grouped content, audience preview, draft/publish states, and validation.
+- Live-preview report and application builders with draggable/resizable layouts, data field wells, visual formatting, persisted source-to-target filter/highlight/none interactions, page duplication/hiding, grouped content, audience preview, draft/publish states, and validation.
 - Secure structured query validation; the browser cannot submit SQL or unregistered identifiers.
 - CSV and Excel exports that enforce authentication, registered visible fields, filters, and row limits.
 - Comments, structured alerts, acknowledgements, audit history, manual refresh, countdown, and refresh monitoring.

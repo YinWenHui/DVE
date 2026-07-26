@@ -9,6 +9,7 @@ import type {
   RoleCode,
   User,
   VisualDefinition,
+  VisualInteractionDefinition,
 } from "@/types";
 
 const now = new Date();
@@ -130,6 +131,16 @@ const baseVisuals = (variant: number): VisualDefinition[] => [
   { id: `v-${variant}-slicer`, type: "slicer", title: "Line slicer", x: 0, y: 12, w: 4, h: 3, dimension: "Line" },
 ];
 
+const baseInteractions = (variant: number, withKpis: boolean): VisualInteractionDefinition[] => withKpis ? [
+  { sourceVisualId: `v-${variant}-slicer`, targetVisualId: `v-${variant}-plan`, mode: "filter" },
+  { sourceVisualId: `v-${variant}-slicer`, targetVisualId: `v-${variant}-actual`, mode: "highlight" },
+  { sourceVisualId: `v-${variant}-slicer`, targetVisualId: `v-${variant}-gap`, mode: "none" },
+] : [
+  { sourceVisualId: `v-${variant}-slicer`, targetVisualId: `v-${variant}-bar`, mode: "filter" },
+  { sourceVisualId: `v-${variant}-slicer`, targetVisualId: `v-${variant}-line`, mode: "highlight" },
+  { sourceVisualId: `v-${variant}-slicer`, targetVisualId: `v-${variant}-donut`, mode: "none" },
+];
+
 const reportNames = [
   ["DL Report DC Line", "dl-report-dc-line", "Daily production health for DC line operations."],
   ["DL Report Main Line", "dl-report-main-line", "Daily plan and actual performance across primary lines."],
@@ -158,16 +169,16 @@ export const seedReports: Report[] = reportNames.map(([name, slug, description],
     { id: `bookmark-${index + 1}-line-a`, name: "Line A focus", pageId: `page-${index + 1}-overview`, filters: { Line: "Line A" } },
   ],
   pages: [
-    { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, visuals: baseVisuals(index + 1), controls: [
+    { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, visuals: baseVisuals(index + 1), interactions: baseInteractions(index + 1, true), controls: [
       { id: `control-${index + 1}-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 15, w: 6, h: 1 },
       { id: `control-${index + 1}-bookmarks`, type: "bookmarkNavigator", title: "Saved views", x: 6, y: 15, w: 6, h: 1 },
       { id: `control-${index + 1}-detail`, type: "button", title: "Open detail", x: 0, y: 16, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-detail` } },
     ] },
-    { id: `page-${index + 1}-detail`, name: "Detail", ordinal: 1, visuals: baseVisuals(index + 11).slice(6), controls: [
+    { id: `page-${index + 1}-detail`, name: "Detail", ordinal: 1, visuals: baseVisuals(index + 11).slice(6), interactions: baseInteractions(index + 11, false), controls: [
       { id: `control-${index + 1}-detail-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 15, w: 6, h: 1 },
       { id: `control-${index + 1}-overview`, type: "button", title: "Back to overview", x: 6, y: 15, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-overview` } },
     ] },
-    { id: `page-${index + 1}-line-detail`, name: "Line detail", ordinal: 2, hidden: true, drillthrough: { fields: ["Line", "Model"], keepAllFilters: true }, visuals: baseVisuals(index + 21).slice(6), controls: [
+    { id: `page-${index + 1}-line-detail`, name: "Line detail", ordinal: 2, hidden: true, drillthrough: { fields: ["Line", "Model"], keepAllFilters: true }, visuals: baseVisuals(index + 21).slice(6), interactions: baseInteractions(index + 21, false), controls: [
       { id: `control-${index + 1}-drill-back`, type: "button", title: "Return to source", x: 0, y: 15, w: 3, h: 1, action: { type: "back" } },
     ] },
   ],
