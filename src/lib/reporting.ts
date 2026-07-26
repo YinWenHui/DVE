@@ -48,8 +48,14 @@ export function resolveVisualInteractionRows(page: ReportPage, targetVisualId: s
 }
 
 export function visualHierarchy(visual: VisualDefinition): Array<keyof ManufacturingRecord> {
-  const fields = [visual.dimension, ...(visual.hierarchy ?? [])].filter((field): field is keyof ManufacturingRecord => Boolean(field));
+  const authored = visual.categoryFields?.length ? visual.categoryFields : [visual.dimension, ...(visual.hierarchy ?? [])];
+  const fields = authored.filter((field): field is keyof ManufacturingRecord => Boolean(field));
   return fields.filter((field, index) => fields.indexOf(field) === index);
+}
+
+export function visualValueFields(visual: VisualDefinition): Array<keyof ManufacturingRecord> {
+  const fields = visual.valueFields?.length ? visual.valueFields : [visual.measure, visual.secondaryMeasure];
+  return fields.filter((field): field is keyof ManufacturingRecord => Boolean(field)).filter((field, index, values) => values.indexOf(field) === index);
 }
 
 export function applyVisualDrillPath(rows: ManufacturingRecord[], path: VisualDrillSelection[]): ManufacturingRecord[] {
@@ -247,6 +253,22 @@ function groupedValues(visual: VisualDefinition, rows: ManufacturingRecord[], me
   };
 }
 
+function groupedLegendSeries(visual: VisualDefinition, rows: ManufacturingRecord[], measure: keyof ManufacturingRecord, categories: string[]) {
+  if (!visual.dimension || !visual.legendField) return [];
+  const groups = new Map<string, Map<string, ManufacturingRecord[]>>();
+  rows.forEach((row) => {
+    const legend = String(row[visual.legendField!] ?? "Blank");
+    const category = String(row[visual.dimension!] ?? "Blank");
+    const categoryMap = groups.get(legend) ?? new Map<string, ManufacturingRecord[]>();
+    categoryMap.set(category, [...(categoryMap.get(category) ?? []), row]);
+    groups.set(legend, categoryMap);
+  });
+  return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([name, categoryMap]) => ({
+    name,
+    values: categories.map((category) => { const categoryRows = categoryMap.get(category); return categoryRows?.length ? aggregateRows(categoryRows, measure, visual.aggregation) : null; }),
+  }));
+}
+
 export function sortVisualRows(visual: VisualDefinition, rows: ManufacturingRecord[]): ManufacturingRecord[] {
   if (!visual.sort) return rows;
   const direction = visual.sort.direction === "asc" ? 1 : -1;
@@ -262,15 +284,17 @@ export function sortVisualRows(visual: VisualDefinition, rows: ManufacturingReco
 
 export function visualData(visual: VisualDefinition, rows: ManufacturingRecord[]): { columns: string[]; rows: Array<Array<string | number>> } {
   const scopedRows = applyReportFilters(rows, visual.filters);
-  if (!visual.dimension || !visual.measure) {
-    if (!visual.measure) return { columns: ["Rows"], rows: [[scopedRows.length]] };
-    return { columns: [visual.title], rows: [[aggregateRows(scopedRows, visual.measure, visual.aggregation)]] };
+  const valueFields = visualValueFields(visual);
+  const primaryMeasure = valueFields[0];
+  if (!visual.dimension || !primaryMeasure) {
+    if (!primaryMeasure) return { columns: ["Rows"], rows: [[scopedRows.length]] };
+    return { columns: [visual.title], rows: [[aggregateRows(scopedRows, primaryMeasure, visual.aggregation)]] };
   }
-  const primary = groupedValues(visual, scopedRows);
-  const secondary = visual.secondaryMeasure ? groupedValues(visual, scopedRows, visual.secondaryMeasure).values : undefined;
+  const groups = valueFields.map((field) => groupedValues(visual, scopedRows, field));
+  const primary = groups[0]!;
   return {
-    columns: [String(visual.dimension), String(visual.measure), ...(visual.secondaryMeasure ? [String(visual.secondaryMeasure)] : [])],
-    rows: primary.categories.map((category, index) => [category, primary.values[index], ...(secondary ? [secondary[index]] : [])]),
+    columns: [String(visual.dimension), ...valueFields.map(String)],
+    rows: primary.categories.map((category, index) => [category, ...groups.map((group) => group.values[index] ?? 0)]),
   };
 }
 
@@ -281,12 +305,15 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
   const accent = visual.conditionalFormatting?.defaultColor ?? visual.display?.accentColor ?? "#5c73e6";
   const palette = [accent, "#2bb7c8", "#75b798", "#e2a45d", "#a78bfa", "#ef7181"];
   const showLabels = visual.display?.showDataLabels ?? false;
-  const showLegend = visual.display?.showLegend ?? ["doughnut", "treemap", "funnel", "combo", "stackedBar", "stackedColumn"].includes(visual.type);
   const tooltips = visual.interaction?.tooltips !== false;
+  const valueFields = visualValueFields(visual);
+  const primaryMeasure = valueFields[0];
+  const secondaryMeasure = valueFields[1];
+  const showLegend = visual.display?.showLegend ?? Boolean(visual.legendField || valueFields.length > 1 || ["doughnut", "treemap", "funnel", "combo", "stackedBar", "stackedColumn"].includes(visual.type));
   const dataColor = (field: keyof ManufacturingRecord, value: number) => resolveConditionalFormatting(visual, field, value).dataColor ?? accent;
 
-  if (visual.type === "gauge" && visual.measure) {
-    const rawValue = aggregateRows(highlightRows ?? rows, visual.measure, visual.aggregation);
+  if (visual.type === "gauge" && primaryMeasure) {
+    const rawValue = aggregateRows(highlightRows ?? rows, primaryMeasure, visual.aggregation);
     const percent = visual.format === "percent";
     const value = percent ? rawValue * 100 : rawValue;
     const maximum = percent ? 100 : Math.max(1, Math.ceil(value * 1.2));
@@ -299,33 +326,33 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
         max: maximum,
         startAngle: 210,
         endAngle: -30,
-        progress: { show: true, width: 14, itemStyle: { color: dataColor(visual.measure, rawValue) } },
+        progress: { show: true, width: 14, itemStyle: { color: dataColor(primaryMeasure, rawValue) } },
         axisLine: { lineStyle: { width: 14 } },
         axisTick: { show: false },
         splitLine: { length: 8 },
         axisLabel: { distance: 20, fontSize: 9 },
         pointer: { width: 4, length: "56%" },
         detail: { valueAnimation: true, formatter: percent ? "{value}%" : "{value}", fontSize: 19, offsetCenter: [0, "62%"] },
-        data: [{ value: Number(value.toFixed(percent ? 1 : 0)), name: hasHighlight ? `${visual.title} · highlighted` : visual.title, itemStyle: { color: dataColor(visual.measure, rawValue) } }],
+        data: [{ value: Number(value.toFixed(percent ? 1 : 0)), name: hasHighlight ? `${visual.title} · highlighted` : visual.title, itemStyle: { color: dataColor(primaryMeasure, rawValue) } }],
       }],
     };
   }
 
-  if (visual.type === "scatter" && visual.measure && visual.secondaryMeasure) {
+  if (visual.type === "scatter" && primaryMeasure && secondaryMeasure) {
     return {
       tooltip: { show: tooltips, trigger: "item" },
       color: palette,
       grid: { left: 52, right: 20, top: 18, bottom: 42 },
-      xAxis: { type: "value", name: String(visual.measure), splitLine: { show: visual.display?.showGridlines !== false } },
-      yAxis: { type: "value", name: String(visual.secondaryMeasure), splitLine: { show: visual.display?.showGridlines !== false } },
+      xAxis: { type: "value", name: String(primaryMeasure), splitLine: { show: visual.display?.showGridlines !== false } },
+      yAxis: { type: "value", name: String(secondaryMeasure), splitLine: { show: visual.display?.showGridlines !== false } },
       series: [{
         type: "scatter",
         symbolSize: 10,
         itemStyle: hasHighlight ? { opacity: .2, color: "#94a3b8" } : undefined,
         data: rows.slice(0, 500).map((row) => ({
           name: visual.dimension ? String(row[visual.dimension]) : "Record",
-          value: [Number(row[visual.measure as keyof ManufacturingRecord]), Number(row[visual.secondaryMeasure as keyof ManufacturingRecord])],
-          itemStyle: { color: hasHighlight ? "#94a3b8" : dataColor(visual.measure!, Number(row[visual.measure!])), opacity: hasHighlight ? .2 : 1 },
+          value: [Number(row[primaryMeasure]), Number(row[secondaryMeasure])],
+          itemStyle: { color: hasHighlight ? "#94a3b8" : dataColor(primaryMeasure, Number(row[primaryMeasure])), opacity: hasHighlight ? .2 : 1 },
         })),
       }, ...(highlightRows ? [{
         name: "Highlighted",
@@ -333,51 +360,76 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
         symbolSize: 12,
         data: highlightRows.slice(0, 500).map((row) => ({
           name: visual.dimension ? String(row[visual.dimension]) : "Record",
-          value: [Number(row[visual.measure as keyof ManufacturingRecord]), Number(row[visual.secondaryMeasure as keyof ManufacturingRecord])],
-          itemStyle: { color: dataColor(visual.measure!, Number(row[visual.measure!])) },
+          value: [Number(row[primaryMeasure]), Number(row[secondaryMeasure])],
+          itemStyle: { color: dataColor(primaryMeasure, Number(row[primaryMeasure])) },
         })),
       }] : [])],
     };
   }
 
-  if (!visual.dimension || !visual.measure) return {};
-  const primary = groupedValues(visual, rows);
-  const secondary = visual.secondaryMeasure ? groupedValues(visual, rows, visual.secondaryMeasure).values : undefined;
-  const highlighted = highlightRows ? groupedValues(visual, highlightRows) : undefined;
-  const highlightedSecondary = highlightRows && visual.secondaryMeasure ? groupedValues(visual, highlightRows, visual.secondaryMeasure) : undefined;
+  if (!visual.dimension || !primaryMeasure) return {};
+  const groupedByField = valueFields.map((field) => ({ field, grouped: groupedValues(visual, rows, field) }));
+  const primary = groupedByField[0]!.grouped;
+  const highlightedByField = highlightRows ? valueFields.map((field) => ({ field, grouped: groupedValues(visual, highlightRows, field) })) : [];
+  const highlighted = highlightedByField[0]?.grouped;
   const alignHighlight = (grouped: ReturnType<typeof groupedValues> | undefined) => {
     const values = new Map(grouped?.categories.map((category, index) => [category, grouped.values[index]]) ?? []);
     return primary.categories.map((category) => values.get(category) ?? 0);
   };
   const highlightedValues = alignHighlight(highlighted);
-  const highlightedSecondaryValues = alignHighlight(highlightedSecondary);
+  const authoredSeries = visual.legendField
+    ? groupedLegendSeries(visual, rows, primaryMeasure, primary.categories).map((series) => ({ ...series, field: primaryMeasure }))
+    : groupedByField.map(({ field, grouped }) => ({ name: String(field), field, values: grouped.values }));
+  const highlightedAuthoredSeries = highlightRows
+    ? visual.legendField
+      ? groupedLegendSeries(visual, highlightRows, primaryMeasure, primary.categories).map((series) => ({ ...series, field: primaryMeasure }))
+      : highlightedByField.map(({ field, grouped }) => ({ name: String(field), field, values: alignHighlight(grouped) }))
+    : [];
+  const escapeTooltip = (value: unknown) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  const tooltipDetails = (category: string) => (visual.tooltipFields ?? []).map((field) => {
+    const categoryRows = rows.filter((row) => String(row[visual.dimension!] ?? "Blank") === category);
+    const rawValues = categoryRows.map((row) => row[field]);
+    const numericValues = rawValues.map(Number).filter(Number.isFinite);
+    const isRate = String(field).endsWith("Rate");
+    const aggregate = numericValues.length === rawValues.length && rawValues.length ? aggregateRows(categoryRows, field, isRate ? "average" : visual.aggregation) : undefined;
+    const value = aggregate === undefined ? [...new Set(rawValues.map(String))].slice(0, 4).join(", ") : isRate ? `${(aggregate * 100).toFixed(1)}%` : aggregate.toLocaleString();
+    return `<span class="tooltip-field">${escapeTooltip(field)}: <b>${escapeTooltip(value)}</b></span>`;
+  });
+  const tooltipFormatter = (input: unknown) => {
+    const params = (Array.isArray(input) ? input : [input]) as Array<{ axisValueLabel?: string; name?: string; seriesName?: string; value?: unknown }>;
+    const category = params[0]?.axisValueLabel ?? params[0]?.name ?? "";
+    const seriesLines = params.filter((param) => param.seriesName).map((param) => `${escapeTooltip(param.seriesName)}: <b>${escapeTooltip(Array.isArray(param.value) ? param.value.join(", ") : param.value)}</b>`);
+    return [`<strong>${escapeTooltip(category)}</strong>`, ...seriesLines, ...tooltipDetails(category)].join("<br/>");
+  };
+  const axisTooltip = { show: tooltips, trigger: "axis" as const, formatter: tooltipFormatter };
+  const itemTooltip = { show: tooltips, trigger: "item" as const, formatter: tooltipFormatter };
   const label = { show: showLabels, position: "top" as const, fontSize: 9 };
 
   if (visual.type === "doughnut") return {
-    tooltip: { show: tooltips, trigger: "item" },
+    tooltip: itemTooltip,
     legend: { show: showLegend, bottom: 0, type: "scroll" },
     color: palette,
-    series: [{ type: "pie", radius: ["45%", "72%"], center: ["50%", "44%"], data: primary.categories.map((name, index) => ({ name, value: primary.values[index], itemStyle: { opacity: hasHighlight ? .2 : 1, color: hasHighlight ? "#94a3b8" : dataColor(visual.measure!, primary.values[index]) } })), label: { show: showLabels } }, ...(highlightRows ? [{ type: "pie" as const, radius: ["45%", "72%"], center: ["50%", "44%"], silent: true, data: primary.categories.map((name, index) => ({ name, value: highlightedValues[index], itemStyle: { color: dataColor(visual.measure!, highlightedValues[index]) } })).filter((item) => item.value !== 0), label: { show: false } }] : [])],
+    series: [{ type: "pie", radius: ["45%", "72%"], center: ["50%", "44%"], data: primary.categories.map((name, index) => ({ name, value: primary.values[index], itemStyle: { opacity: hasHighlight ? .2 : 1, color: hasHighlight ? "#94a3b8" : dataColor(primaryMeasure, primary.values[index]) } })), label: { show: showLabels } }, ...(highlightRows ? [{ type: "pie" as const, radius: ["45%", "72%"], center: ["50%", "44%"], silent: true, data: primary.categories.map((name, index) => ({ name, value: highlightedValues[index], itemStyle: { color: dataColor(primaryMeasure, highlightedValues[index]) } })).filter((item) => item.value !== 0), label: { show: false } }] : [])],
   };
 
   if (visual.type === "treemap") return {
-    tooltip: { show: tooltips, trigger: "item" },
+    tooltip: itemTooltip,
     color: palette,
-    series: [{ type: "treemap", roam: false, breadcrumb: { show: false }, label: { show: true, formatter: "{b}" }, data: primary.categories.map((name, index) => ({ name, value: primary.values[index], itemStyle: { color: dataColor(visual.measure!, primary.values[index]), opacity: hasHighlight ? highlightedValues[index] ? 1 : .2 : 1 } })) }],
+    series: [{ type: "treemap", roam: false, breadcrumb: { show: false }, label: { show: true, formatter: "{b}" }, data: primary.categories.map((name, index) => ({ name, value: primary.values[index], itemStyle: { color: dataColor(primaryMeasure, primary.values[index]), opacity: hasHighlight ? highlightedValues[index] ? 1 : .2 : 1 } })) }],
   };
 
   if (visual.type === "funnel") return {
-    tooltip: { show: tooltips, trigger: "item" },
+    tooltip: itemTooltip,
     legend: { show: showLegend, bottom: 0, type: "scroll" },
     color: palette,
-    series: [{ type: "funnel", left: "12%", top: 10, bottom: 32, width: "76%", minSize: "8%", maxSize: "100%", sort: "descending", gap: 2, label: { show: showLabels, position: "inside" }, data: primary.categories.map((name, index) => ({ name, value: primary.values[index], itemStyle: { color: dataColor(visual.measure!, primary.values[index]), opacity: hasHighlight ? highlightedValues[index] ? 1 : .2 : 1 } })) }],
+    series: [{ type: "funnel", left: "12%", top: 10, bottom: 32, width: "76%", minSize: "8%", maxSize: "100%", sort: "descending", gap: 2, label: { show: showLabels, position: "inside" }, data: primary.categories.map((name, index) => ({ name, value: primary.values[index], itemStyle: { color: dataColor(primaryMeasure, primary.values[index]), opacity: hasHighlight ? highlightedValues[index] ? 1 : .2 : 1 } })) }],
   };
 
   const horizontal = visual.type === "bar" || visual.type === "stackedBar";
   const categoryAxis = { type: "category" as const, data: primary.categories, axisLabel: { hideOverlap: true }, ...(horizontal ? { inverse: true } : {}) };
   const valueAxis = { type: "value" as const, splitLine: { show: visual.display?.showGridlines !== false } };
   const common = {
-    tooltip: { show: tooltips, trigger: "axis" as const },
+    tooltip: axisTooltip,
     legend: { show: showLegend, bottom: 0 },
     grid: { left: horizontal ? 70 : 48, right: 20, top: 20, bottom: showLegend ? 48 : 38, containLabel: false },
     xAxis: horizontal ? valueAxis : categoryAxis,
@@ -387,25 +439,27 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
 
   if (visual.type === "line" || visual.type === "area") return {
     ...common,
-    series: [{ name: String(visual.measure), type: "line", smooth: true, data: primary.values.map((value) => ({ value, itemStyle: { color: hasHighlight ? "#94a3b8" : dataColor(visual.measure!, value), opacity: hasHighlight ? .2 : 1 } })), symbolSize: 5, label, lineStyle: hasHighlight ? { opacity: .2, color: "#94a3b8" } : undefined, areaStyle: visual.type === "area" ? { opacity: hasHighlight ? .06 : .18 } : undefined }, ...(highlightRows ? [{ name: "Highlighted", type: "line" as const, smooth: true, data: highlightedValues.map((value) => ({ value, itemStyle: { color: dataColor(visual.measure!, value) } })), symbolSize: 6, label, areaStyle: visual.type === "area" ? { opacity: .2 } : undefined }] : [])],
+    series: [
+      ...authoredSeries.map((series, seriesIndex) => ({ name: series.name, type: "line" as const, smooth: true, data: series.values.map((value) => ({ value, itemStyle: { color: hasHighlight ? "#94a3b8" : resolveConditionalFormatting(visual, series.field, value).dataColor ?? palette[seriesIndex % palette.length], opacity: hasHighlight ? .2 : 1 } })), symbolSize: 5, label, lineStyle: hasHighlight ? { opacity: .2, color: "#94a3b8" } : { color: palette[seriesIndex % palette.length] }, areaStyle: visual.type === "area" ? { opacity: hasHighlight ? .06 : .14 } : undefined })),
+      ...highlightedAuthoredSeries.map((series, seriesIndex) => ({ name: `${series.name} highlighted`, type: "line" as const, smooth: true, data: series.values.map((value) => ({ value, itemStyle: { color: resolveConditionalFormatting(visual, series.field, value).dataColor ?? palette[seriesIndex % palette.length] } })), symbolSize: 6, label, areaStyle: visual.type === "area" ? { opacity: .2 } : undefined })),
+    ],
   };
 
   if (visual.type === "combo") return {
     ...common,
     yAxis: [{ ...valueAxis }, { ...valueAxis, splitLine: { show: false } }],
     series: [
-      { name: String(visual.measure), type: "bar", data: primary.values.map((value) => ({ value, itemStyle: { color: hasHighlight ? "#94a3b8" : dataColor(visual.measure!, value), opacity: hasHighlight ? .2 : 1 } })), barMaxWidth: 42, label },
-      { name: String(visual.secondaryMeasure ?? visual.measure), type: "line", yAxisIndex: 1, smooth: true, data: (secondary ?? primary.values).map((value) => ({ value, itemStyle: { color: hasHighlight ? "#94a3b8" : dataColor(visual.secondaryMeasure ?? visual.measure!, value), opacity: hasHighlight ? .2 : 1 } })), label, lineStyle: hasHighlight ? { opacity: .2, color: "#94a3b8" } : undefined },
-      ...(highlightRows ? [{ name: "Highlighted", type: "bar" as const, data: highlightedValues.map((value) => ({ value, itemStyle: { color: dataColor(visual.measure!, value) } })), barMaxWidth: 42, barGap: "-100%", label }, { name: "Highlighted secondary", type: "line" as const, yAxisIndex: 1, smooth: true, data: highlightedSecondaryValues.map((value) => ({ value, itemStyle: { color: dataColor(visual.secondaryMeasure ?? visual.measure!, value) } })), label }] : []),
+      ...authoredSeries.map((series, seriesIndex) => ({ name: series.name, type: seriesIndex === 0 ? "bar" as const : "line" as const, yAxisIndex: seriesIndex === 0 ? 0 : 1, smooth: seriesIndex > 0, data: series.values.map((value) => ({ value, itemStyle: { color: hasHighlight ? "#94a3b8" : resolveConditionalFormatting(visual, series.field, value).dataColor ?? palette[seriesIndex % palette.length], opacity: hasHighlight ? .2 : 1 } })), barMaxWidth: seriesIndex === 0 ? 42 : undefined, label, lineStyle: seriesIndex > 0 && hasHighlight ? { opacity: .2, color: "#94a3b8" } : undefined })),
+      ...highlightedAuthoredSeries.map((series, seriesIndex) => ({ name: `${series.name} highlighted`, type: seriesIndex === 0 ? "bar" as const : "line" as const, yAxisIndex: seriesIndex === 0 ? 0 : 1, smooth: seriesIndex > 0, data: series.values.map((value) => ({ value, itemStyle: { color: resolveConditionalFormatting(visual, series.field, value).dataColor ?? palette[seriesIndex % palette.length] } })), barMaxWidth: seriesIndex === 0 ? 42 : undefined, barGap: seriesIndex === 0 ? "-100%" : undefined, label })),
     ],
   };
 
   if (visual.type === "waterfall") return {
     ...common,
     series: [{
-      name: String(visual.measure),
+      name: String(primaryMeasure),
       type: "bar",
-      data: primary.values.map((value, index) => ({ value, itemStyle: { color: resolveConditionalFormatting(visual, visual.measure!, value).dataColor ?? (value < 0 ? "#ef7181" : accent), opacity: hasHighlight ? highlightedValues[index] ? 1 : .2 : 1 } })),
+      data: primary.values.map((value, index) => ({ value, itemStyle: { color: resolveConditionalFormatting(visual, primaryMeasure, value).dataColor ?? (value < 0 ? "#ef7181" : accent), opacity: hasHighlight ? highlightedValues[index] ? 1 : .2 : 1 } })),
       barMaxWidth: 42,
       label,
     }],
@@ -415,9 +469,8 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
   return {
     ...common,
     series: [
-      { name: String(visual.measure), type: "bar", stack: stacked ? "total" : undefined, data: primary.values.map((value) => ({ value, itemStyle: { borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0], opacity: hasHighlight ? .2 : 1, color: hasHighlight ? "#94a3b8" : dataColor(visual.measure!, value) } })), barMaxWidth: 44, label },
-      ...(stacked && secondary ? [{ name: String(visual.secondaryMeasure), type: "bar" as const, stack: "total", data: secondary.map((value) => ({ value, itemStyle: { color: hasHighlight ? "#cbd5e1" : dataColor(visual.secondaryMeasure!, value), opacity: hasHighlight ? .2 : 1 } })), barMaxWidth: 44, label }] : []),
-      ...(highlightRows ? [{ name: "Highlighted", type: "bar" as const, data: highlightedValues.map((value) => ({ value, itemStyle: { color: dataColor(visual.measure!, value), borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0] } })), barMaxWidth: 44, barGap: "-100%", label }] : []),
+      ...authoredSeries.map((series, seriesIndex) => ({ name: series.name, type: "bar" as const, stack: stacked ? "total" : undefined, data: series.values.map((value) => ({ value, itemStyle: { borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0], opacity: hasHighlight ? .2 : 1, color: hasHighlight ? "#94a3b8" : resolveConditionalFormatting(visual, series.field, value).dataColor ?? palette[seriesIndex % palette.length] } })), barMaxWidth: 44, label })),
+      ...highlightedAuthoredSeries.map((series, seriesIndex) => ({ name: `${series.name} highlighted`, type: "bar" as const, data: series.values.map((value) => ({ value, itemStyle: { color: resolveConditionalFormatting(visual, series.field, value).dataColor ?? palette[seriesIndex % palette.length], borderRadius: horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0] } })), barMaxWidth: 44, barGap: "-100%", label })),
     ],
   };
 }

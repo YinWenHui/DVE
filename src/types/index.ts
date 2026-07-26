@@ -204,8 +204,13 @@ export interface VisualDefinition {
   h: number;
   dimension?: keyof ManufacturingRecord;
   hierarchy?: Array<keyof ManufacturingRecord>;
+  categoryFields?: Array<keyof ManufacturingRecord>;
   measure?: keyof ManufacturingRecord;
   secondaryMeasure?: keyof ManufacturingRecord;
+  valueFields?: Array<keyof ManufacturingRecord>;
+  legendField?: keyof ManufacturingRecord;
+  smallMultipleField?: keyof ManufacturingRecord;
+  tooltipFields?: Array<keyof ManufacturingRecord>;
   aggregation?: Aggregation;
   format?: "number" | "percent";
   display?: VisualDisplayOptions;

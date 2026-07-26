@@ -254,6 +254,9 @@ h1, h2, h3, h4, p { margin-top: 0; }
 .report-action-control > button { display: flex; width: 100%; align-items: center; justify-content: center; gap: 7px; border: 0; background: color-mix(in srgb, var(--control-accent) 10%, var(--control-background)); color: var(--control-accent); font-size: .7rem; font-weight: 800; cursor: pointer; }
 .report-action-control > button:hover { background: color-mix(in srgb, var(--control-accent) 18%, var(--control-background)); }
 .visual-body { height: calc(100% - 39px); min-height: 0; padding: 6px 10px 10px; }
+.small-multiples-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 7px; overflow: auto; }
+.small-multiple { display: grid; min-height: 150px; grid-template-rows: 22px minmax(120px, 1fr); overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); }
+.small-multiple > strong { padding: 5px 8px; overflow: hidden; color: var(--muted); font-size: .61rem; text-overflow: ellipsis; white-space: nowrap; }
 .kpi-card { position: relative; display: flex; height: 100%; flex-direction: column; justify-content: center; padding: 16px; border-top: 3px solid var(--visual-accent, var(--accent)); }
 .kpi-card > .visual-actions { position: absolute; top: 4px; right: 5px; }
 .kpi-card span { color: var(--muted); font-size: .66rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
@@ -390,6 +393,15 @@ h1, h2, h3, h4, p { margin-top: 0; }
 .builder-settings-tabs button.active { border-color: var(--accent); color: var(--accent); }
 .settings-group { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .settings-group > strong { font-size: .69rem; }
+.field-well-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.field-well-heading > strong { font-size: .69rem; }
+.field-well-list { display: grid; gap: 5px; }
+.field-well-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, 27px); align-items: center; gap: 4px; padding: 5px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
+.field-well-row > span { overflow: hidden; font-size: .62rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.field-well-row > button { display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--muted); cursor: pointer; }
+.field-well-row > button:disabled { opacity: .35; cursor: not-allowed; }
+.field-well-select-row { grid-template-columns: minmax(0, 1fr) repeat(3, 27px); }
+.field-well-select-row > select { width: 100%; min-width: 0; height: 29px; border: 0; background: transparent; color: var(--text); font-size: .62rem; }
 .conditional-formatting-heading, .conditional-rule-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .conditional-formatting-editor { scroll-margin-top: 48px; }
 .conditional-formatting-heading > div { display: grid; gap: 3px; }

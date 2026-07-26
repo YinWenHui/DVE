@@ -148,6 +148,19 @@ function VisualActions({ visual, onFocus, onShowData, onDrillthrough, drill }: {
 function ChartVisual({ visual, rows, highlightRows, onSelect, actions, style, meta }: { visual: VisualDefinition; rows: ManufacturingRecord[]; highlightRows?: ManufacturingRecord[]; onSelect?: ReportVisualProps["onSelect"]; actions: React.ReactNode; style: CSSProperties; meta: string }) {
   const option = useMemo(() => chartOption(visual, rows, highlightRows), [highlightRows, rows, visual]);
   const select = useCallback((value: string) => onSelect?.(visual.dimension, value), [onSelect, visual.dimension]);
+  const multiples = useMemo(() => {
+    if (!visual.smallMultipleField) return [];
+    const values = [...new Set(rows.map((row) => String(row[visual.smallMultipleField!] ?? "Blank")))].sort().slice(0, 8);
+    return values.map((value) => ({
+      value,
+      rows: rows.filter((row) => String(row[visual.smallMultipleField!] ?? "Blank") === value),
+      highlightRows: highlightRows?.filter((row) => String(row[visual.smallMultipleField!] ?? "Blank") === value),
+    }));
+  }, [highlightRows, rows, visual.smallMultipleField]);
+  if (visual.smallMultipleField && multiples.length) return <article className="visual-card interactive" style={style} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0} data-small-multiple-count={multiples.length}>
+    <VisualHeader visual={visual} meta={`${displayFieldName(visual.smallMultipleField)} small multiples`} actions={actions} />
+    <div className="visual-body small-multiples-grid">{multiples.map((multiple) => <section className="small-multiple" key={multiple.value}><strong>{multiple.value}</strong><EChart option={chartOption({ ...visual, smallMultipleField: undefined }, multiple.rows, multiple.highlightRows)} onSelect={onSelect ? select : undefined} /></section>)}</div>
+  </article>;
   return <article className="visual-card interactive" style={style} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0}>
     <VisualHeader visual={visual} meta={meta} actions={actions} />
     <div className="visual-body"><EChart option={option} onSelect={onSelect ? select : undefined} /></div>

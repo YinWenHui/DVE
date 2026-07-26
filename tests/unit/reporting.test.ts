@@ -64,6 +64,28 @@ describe("report visual metadata", () => {
     expect(data.rows).toHaveLength(3);
   });
 
+  it("renders ordered multi-value wells and legend series", () => {
+    const multiValue: VisualDefinition = { id: "multi", type: "column", title: "Plan, actual, and gap", x: 0, y: 0, w: 6, h: 5, dimension: "Line", categoryFields: ["Line", "Model"], measure: "ActualQty", secondaryMeasure: "PlanQty", valueFields: ["ActualQty", "PlanQty", "GapQty"], aggregation: "sum" };
+    expect(visualHierarchy(multiValue)).toEqual(["Line", "Model"]);
+    expect(visualData(multiValue, rows).columns).toEqual(["Line", "ActualQty", "PlanQty", "GapQty"]);
+    expect((chartOption(multiValue, rows) as { series: unknown[] }).series).toHaveLength(3);
+    const legend: VisualDefinition = { ...multiValue, valueFields: ["ActualQty"], secondaryMeasure: undefined, legendField: "Shift" };
+    const option = chartOption(legend, rows) as { legend: { show: boolean }; series: Array<{ name: string }> };
+    expect(option.legend.show).toBe(true);
+    expect(option.series.map((series) => series.name)).toEqual(["Day", "Night"]);
+  });
+
+  it("adds authored tooltip fields with escaped values", () => {
+    const visual: VisualDefinition = { id: "tooltip", type: "bar", title: "Actual by customer", x: 0, y: 0, w: 6, h: 5, dimension: "Customer", measure: "ActualQty", tooltipFields: ["PendingQty", "Model"] };
+    const unsafeRows = rows.map((row) => row.Customer === "Customer Alpha" ? { ...row, Model: "<script>alert(1)</script>" } : row);
+    const option = chartOption(visual, unsafeRows) as { tooltip: { formatter: (value: unknown) => string } };
+    const html = option.tooltip.formatter([{ axisValueLabel: "Customer Alpha", seriesName: "ActualQty", value: 100 }]);
+    expect(html).toContain("PendingQty");
+    expect(html).toContain("Model");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).not.toContain("<script>");
+  });
+
   it("resolves hierarchy levels and carries the selected parent context", () => {
     const visual: VisualDefinition = { id: "drill", type: "bar", title: "Output hierarchy", x: 0, y: 0, w: 6, h: 5, dimension: "Line", hierarchy: ["Line", "Model", "Shift", "Line"], measure: "ActualQty", aggregation: "sum" };
     expect(visualHierarchy(visual)).toEqual(["Line", "Model", "Shift"]);
@@ -129,7 +151,7 @@ describe("report visual metadata", () => {
     expect(chartOption(base, rows)).toMatchObject({ series: [{ type: "treemap" }] });
     expect(chartOption({ ...base, type: "gauge", dimension: undefined }, rows)).toMatchObject({ series: [{ type: "gauge" }] });
     expect(chartOption({ ...base, type: "scatter", secondaryMeasure: "PlanQty" }, rows)).toMatchObject({ series: [{ type: "scatter" }] });
-    expect(chartOption({ ...base, type: "line" }, rows, rows.filter((row) => row.Line === "Line A"))).toMatchObject({ series: [{ type: "line" }, { name: "Highlighted", type: "line" }] });
+    expect(chartOption({ ...base, type: "line" }, rows, rows.filter((row) => row.Line === "Line A"))).toMatchObject({ series: [{ type: "line" }, { name: "ActualQty highlighted", type: "line" }] });
   });
 
   it("resolves honest report canvas states without hiding a valid previous version", () => {

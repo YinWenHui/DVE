@@ -12,7 +12,7 @@ The core is functional. Production completion work still includes full SQL repos
 
 ## Front-end milestone — active pilot priority
 
-Finish the Power BI-style report consumption, authoring, personalization, and distribution experience before hosting work. The detailed implemented/remaining matrix is in [frontend-parity.md](frontend-parity.md). Delivered tranches now include the expanded visual catalog, advanced scoped filters and sorting, ordered conditional formatting, live authoring previews, persisted per-visual filter/highlight/none interactions, focus/show-data actions, hierarchy drill, drillthrough, report bookmarks, authored navigation controls, and personal bookmarks.
+Finish the Power BI-style report consumption, authoring, personalization, and distribution experience before hosting work. The detailed implemented/remaining matrix is in [frontend-parity.md](frontend-parity.md). Delivered tranches now include the expanded visual catalog, advanced scoped filters and sorting, ordered conditional formatting, multi-field wells with legends/tooltips/small multiples, live authoring previews, persisted per-visual filter/highlight/none interactions, focus/show-data actions, hierarchy drill, drillthrough, report bookmarks, authored navigation controls, and personal bookmarks.
 
 ## Semantic model milestone
 

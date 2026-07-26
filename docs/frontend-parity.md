@@ -17,7 +17,7 @@ Hosting, production security hardening, service packaging, centralized monitorin
 | Filtering | Viewer filters plus persisted report-, page-, and visual-level basic/advanced filters, AND/OR clauses, Top/Bottom N, rolling/current relative dates, locked and hidden constraints, and authored visual sort order |
 | Interactions | Persisted source-to-target filter/highlight/none editing, hierarchy drill down/up/expand controls, hidden drillthrough targets with carried filter context/back navigation, authored page/bookmark/back/reset buttons, page and bookmark navigators, slicers, tooltips, reset/clear, focus mode, show underlying data |
 | Personalization | Persisted report-owned bookmarks with page/filter state plus browser-local personal bookmarks |
-| Authoring | Live visual previews, draggable/resizable grid, data field wells, secondary measures, aggregation and number format |
+| Authoring | Live visual previews, draggable/resizable grid, ordered category/value/tooltip wells, multi-measure series, legend splitting, small multiples, field reordering, aggregation and number format |
 | Formatting | Title visibility/alignment, accent/background colors, radius, legend, labels, gridlines, tooltip and cross-filter switches, plus ordered threshold rules for chart/KPI colors and table/matrix backgrounds, text, and data bars |
 | Pages | Add, rename, duplicate, hide/show, and delete |
 | Distribution | Published app navigation, audience visibility, comments, CSV and Excel data export |
@@ -26,7 +26,6 @@ Hosting, production security hardening, service packaging, centralized monitorin
 
 ### Front-end phase C — authoring depth
 
-- Multi-field field wells, legends, small multiples, tooltips, and field reordering.
 - Theme editor, reusable format presets, page wallpaper, grid/snap controls, undo/redo, copy/paste, and selection pane.
 - Text boxes, shapes, images, buttons, KPI targets, and richer table/matrix column configuration.
 - Mobile layout authoring, accessibility inspection, keyboard editing, and high-contrast validation.
