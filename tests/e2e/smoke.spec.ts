@@ -7,6 +7,9 @@ test("mock administrator opens the seeded application and uses report controls",
   await expect(page.getByText("Daily Report")).toBeVisible(); await expect(page.getByText("Actual by Line")).toBeVisible();
   await page.getByTitle("Toggle theme").dispatchEvent("click"); await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.getByTitle("Refresh now").dispatchEvent("click"); await expect(page.getByText(/Refresh in/)).toBeVisible();
+  await page.goto("/admin/alerts");
+  await expect(page.getByRole("heading", { name: "Structured alert rules" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Achievement below target" })).toBeVisible();
 });
 
 test("viewer is blocked from administration", async ({ page }) => {

@@ -27,25 +27,30 @@ declare global {
   var __digitalVerseMockStore: MockStore | undefined;
 }
 
+function hydrateStore(store: Partial<MockStore>): MockStore {
+  // The development server keeps this global across hot reloads. Backfill newly
+  // introduced fields so an older in-memory shape cannot break a refreshed page.
+  store.users ??= structuredClone(mockUsers);
+  store.datasets ??= structuredClone([seedDataset]);
+  store.reports ??= structuredClone(seedReports);
+  store.apps ??= structuredClone([seedApp]);
+  store.records ??= new Map([[seedDataset.id, syntheticRecords.map((record) => ({ ...record }))]]);
+  store.sessions ??= new Map();
+  store.comments ??= [];
+  store.alerts ??= structuredClone(seedAlerts);
+  store.alertRules ??= structuredClone(seedAlertRules);
+  store.audit ??= structuredClone(seedAudit);
+  store.refreshRuns ??= [];
+  store.pendingImports ??= new Map();
+  return store as MockStore;
+}
+
 function createStore(): MockStore {
-  return {
-    users: structuredClone(mockUsers),
-    datasets: structuredClone([seedDataset]),
-    reports: structuredClone(seedReports),
-    apps: structuredClone([seedApp]),
-    records: new Map([[seedDataset.id, syntheticRecords.map((record) => ({ ...record }))]]),
-    sessions: new Map(),
-    comments: [],
-    alerts: structuredClone(seedAlerts),
-    alertRules: structuredClone(seedAlertRules),
-    audit: structuredClone(seedAudit),
-    refreshRuns: [],
-    pendingImports: new Map(),
-  };
+  return hydrateStore({});
 }
 
 export function getMockStore(): MockStore {
-  globalThis.__digitalVerseMockStore ??= createStore();
+  globalThis.__digitalVerseMockStore = hydrateStore(globalThis.__digitalVerseMockStore ?? createStore());
   return globalThis.__digitalVerseMockStore;
 }
 

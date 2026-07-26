@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CheckCircle2, Plus } from "lucide-react";
 import type { AlertEvent, AlertRule, Dataset } from "@/types";
 
-export function AlertManager({ initialAlerts, initialRules, datasets }: { initialAlerts: AlertEvent[]; initialRules: AlertRule[]; datasets: Dataset[] }) {
+export function AlertManager({ initialAlerts = [], initialRules = [], datasets = [] }: { initialAlerts?: AlertEvent[]; initialRules?: AlertRule[]; datasets?: Dataset[] }) {
   const [alerts, setAlerts] = useState(initialAlerts); const [rules, setRules] = useState(initialRules); const [comment, setComment] = useState<Record<string, string>>({}); const [message, setMessage] = useState<string>();
   const dataset = datasets[0]; const numericFields = dataset?.fields.filter((field) => field.semanticType === "measure") ?? [];
 
