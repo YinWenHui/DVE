@@ -100,6 +100,28 @@ export function aggregateRows(
   return values.reduce((sum, value) => sum + value, 0);
 }
 
+export interface ResolvedKpiTarget {
+  target: number;
+  variance: number;
+  variancePercent?: number;
+  achieved: boolean;
+}
+
+export function resolveKpiTarget(visual: VisualDefinition, rows: ManufacturingRecord[], value: number): ResolvedKpiTarget | undefined {
+  if (!visual.target) return undefined;
+  const target = visual.target.mode === "measure" && visual.target.measure
+    ? aggregateRows(rows, visual.target.measure, visual.target.aggregation ?? visual.aggregation)
+    : Number(visual.target.value);
+  if (!Number.isFinite(target)) return undefined;
+  const variance = value - target;
+  return {
+    target,
+    variance,
+    variancePercent: target === 0 ? undefined : variance / Math.abs(target),
+    achieved: visual.target.direction === "lowerIsBetter" ? value <= target : value >= target,
+  };
+}
+
 export interface ResolvedConditionalFormatting {
   dataColor?: string;
   backgroundColor?: string;

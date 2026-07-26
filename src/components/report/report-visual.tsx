@@ -4,7 +4,7 @@ import { memo, useCallback, useMemo, useState, type CSSProperties, type MouseEve
 import { ChevronUp, ChevronsDown, CornerUpRight, GitBranch, Maximize2, TableProperties } from "lucide-react";
 import { EChart } from "./echart";
 import { ProductionMatrix, ProductionTable } from "./data-table";
-import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, resolveConditionalFormatting, sortVisualRows, visualHierarchy, type VisualDrillSelection } from "@/lib/reporting";
+import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, resolveConditionalFormatting, resolveKpiTarget, sortVisualRows, visualHierarchy, type VisualDrillSelection } from "@/lib/reporting";
 import type { ManufacturingRecord, VisualDefinition } from "@/types";
 
 const numberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -83,13 +83,16 @@ export const ReportVisual = memo(function ReportVisual({ visual, rows, highlight
     const value = aggregateRows(drilledRows, visual.measure, visual.aggregation);
     const highlightedValue = drilledHighlightRows ? aggregateRows(drilledHighlightRows, visual.measure, visual.aggregation) : undefined;
     const conditional = resolveConditionalFormatting(visual, visual.measure, value);
+    const target = resolveKpiTarget(visual, drilledRows, value);
     const kpiStyle = { ...style, "--visual-accent": conditional.dataColor ?? visual.conditionalFormatting?.defaultColor ?? visual.display?.accentColor ?? "var(--accent)", backgroundColor: conditional.backgroundColor ?? visual.display?.backgroundColor } as CSSProperties;
     const formatValue = (input: number) => visual.format === "percent" ? `${(input * 100).toFixed(1)}%` : numberFormat.format(input);
-    return <article className="visual-card kpi-card" style={kpiStyle} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0} data-conditional-data-color={conditional.dataColor} data-conditional-background={conditional.backgroundColor}>
+    const formatVariance = () => visual.target?.varianceFormat === "value" || target?.variancePercent === undefined ? `${target && target.variance >= 0 ? "+" : ""}${formatValue(target?.variance ?? 0)}` : `${target && target.variancePercent >= 0 ? "+" : ""}${((target?.variancePercent ?? 0) * 100).toFixed(1)}%`;
+    const progress = target && target.target !== 0 ? Math.max(0, Math.min(100, Math.abs(value / target.target) * 100)) : 0;
+    return <article className="visual-card kpi-card" style={kpiStyle} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0} data-conditional-data-color={conditional.dataColor} data-conditional-background={conditional.backgroundColor} data-kpi-target={target?.target} data-kpi-achieved={target?.achieved}>
       {actions}
       <span>{visual.display?.showTitle === false ? null : visual.title}</span>
       <strong style={{ color: conditional.textColor }} data-conditional-text={conditional.textColor}>{formatValue(value)}</strong>
-      <small className={highlightedValue === undefined ? undefined : "interaction-highlight-summary"}>{highlightedValue === undefined ? (drilledRows.length ? "Within current filter context" : "No matching records") : `${formatValue(highlightedValue)} highlighted of ${formatValue(value)}`}</small>
+      {target ? <><div className="kpi-target"><div><em>Target {formatValue(target.target)}</em><b className={target.achieved ? "achieved" : "missed"}>{formatVariance()}</b></div><span aria-label={`${progress.toFixed(0)} percent of target`}><i style={{ width: `${progress}%` }} /></span></div>{highlightedValue !== undefined && <small className="interaction-highlight-summary">{formatValue(highlightedValue)} highlighted of {formatValue(value)}</small>}</> : <small className={highlightedValue === undefined ? undefined : "interaction-highlight-summary"}>{highlightedValue === undefined ? (drilledRows.length ? "Within current filter context" : "No matching records") : `${formatValue(highlightedValue)} highlighted of ${formatValue(value)}`}</small>}
     </article>;
   }
 

@@ -219,6 +219,36 @@ export interface VisualInteractionOptions {
   tooltips?: boolean;
 }
 
+export interface KpiTargetDefinition {
+  mode: "constant" | "measure";
+  value?: number;
+  measure?: keyof ManufacturingRecord;
+  aggregation?: Aggregation;
+  direction?: "higherIsBetter" | "lowerIsBetter";
+  varianceFormat?: "value" | "percent";
+}
+
+export type TabularColumnFormat = "auto" | "text" | "number" | "percent" | "date";
+
+export interface TabularColumnDefinition {
+  field: keyof ManufacturingRecord;
+  label?: string;
+  width?: number;
+  alignment?: "left" | "center" | "right";
+  format?: TabularColumnFormat;
+  decimalPlaces?: number;
+  aggregation?: Aggregation;
+}
+
+export interface TabularVisualOptions {
+  columns?: TabularColumnDefinition[];
+  matrixRows?: Array<keyof ManufacturingRecord>;
+  rowLimit?: number;
+  showTotals?: boolean;
+  stripedRows?: boolean;
+  density?: "compact" | "standard" | "comfortable";
+}
+
 export interface VisualDefinition {
   id: string;
   type: VisualType;
@@ -243,6 +273,8 @@ export interface VisualDefinition {
   filters?: ReportFilterDefinition[];
   sort?: VisualSortDefinition;
   conditionalFormatting?: VisualConditionalFormatting;
+  target?: KpiTargetDefinition;
+  tabular?: TabularVisualOptions;
   hidden?: boolean;
 }
 
@@ -275,7 +307,7 @@ export interface ReportBookmarkDefinition {
   filters?: ReportBookmarkFilters;
 }
 
-export type ReportControlType = "button" | "pageNavigator" | "bookmarkNavigator";
+export type ReportControlType = "button" | "pageNavigator" | "bookmarkNavigator" | "textBox" | "shape" | "image";
 export type ReportActionType = "page" | "bookmark" | "back" | "resetFilters";
 
 export interface ReportActionDefinition {
@@ -287,7 +319,15 @@ export interface ReportControlDisplayOptions {
   backgroundColor?: string;
   accentColor?: string;
   textColor?: string;
+  borderColor?: string;
+  borderWidth?: number;
   borderRadius?: number;
+  fontSize?: number;
+  fontWeight?: "normal" | "semibold" | "bold";
+  textAlignment?: "left" | "center" | "right";
+  verticalAlignment?: "start" | "center" | "end";
+  shape?: "rectangle" | "roundedRectangle" | "ellipse" | "line";
+  imageFit?: "cover" | "contain" | "fill";
 }
 
 export interface ReportControlDefinition {
@@ -300,6 +340,9 @@ export interface ReportControlDefinition {
   h: number;
   action?: ReportActionDefinition;
   display?: ReportControlDisplayOptions;
+  content?: string;
+  imageUrl?: string;
+  altText?: string;
   hidden?: boolean;
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSyntheticRecords, seedReports } from "@/data/seed";
-import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, drillthroughTargets, matchesConditionalFormattingRule, resolveConditionalFormatting, resolveReportCanvasState, resolveVisualInteractionRows, sortVisualRows, visualData, visualHierarchy, visualInteractionMode } from "@/lib/reporting";
+import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, drillthroughTargets, matchesConditionalFormattingRule, resolveConditionalFormatting, resolveKpiTarget, resolveReportCanvasState, resolveVisualInteractionRows, sortVisualRows, visualData, visualHierarchy, visualInteractionMode } from "@/lib/reporting";
 import type { ReportPage, VisualDefinition } from "@/types";
 
 describe("report visual metadata", () => {
@@ -152,6 +152,18 @@ describe("report visual metadata", () => {
     expect(chartOption({ ...base, type: "gauge", dimension: undefined }, rows)).toMatchObject({ series: [{ type: "gauge" }] });
     expect(chartOption({ ...base, type: "scatter", secondaryMeasure: "PlanQty" }, rows)).toMatchObject({ series: [{ type: "scatter" }] });
     expect(chartOption({ ...base, type: "line" }, rows, rows.filter((row) => row.Line === "Line A"))).toMatchObject({ series: [{ type: "line" }, { name: "ActualQty highlighted", type: "line" }] });
+  });
+
+  it("resolves KPI targets from constants or another measure", () => {
+    const constant: VisualDefinition = { id: "kpi", type: "kpi", title: "Achievement", x: 0, y: 0, w: 2, h: 2, measure: "AchievementRate", target: { mode: "constant", value: 1 } };
+    const resolved = resolveKpiTarget(constant, rows, 1.024);
+    expect(resolved).toMatchObject({ target: 1, achieved: true });
+    expect(resolved?.variance).toBeCloseTo(0.024);
+    expect(resolved?.variancePercent).toBeCloseTo(0.024);
+    const measured: VisualDefinition = { ...constant, measure: "ActualQty", target: { mode: "measure", measure: "PlanQty", aggregation: "sum", direction: "higherIsBetter" } };
+    const target = aggregateRows(rows, "PlanQty", "sum");
+    expect(resolveKpiTarget(measured, rows, target - 10)).toMatchObject({ target, variance: -10, achieved: false });
+    expect(resolveKpiTarget({ ...constant, target: { mode: "constant", value: 5, direction: "lowerIsBetter" } }, rows, 4)?.achieved).toBe(true);
   });
 
   it("resolves honest report canvas states without hiding a valid previous version", () => {
