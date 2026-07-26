@@ -256,9 +256,9 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
                 const canDrillthrough = visualHierarchy(visual).some((field) => drillthroughTargets(report.pages, page.id, field).length > 0);
                 const interactionRows = interactionRowsFor(visual.id);
                 const selectedValue = visualSelections.find((selection) => selection.sourceVisualId === visual.id)?.value;
-                return <div className="report-grid-item" style={reportGridStyle(visual)} data-visual-title={visual.title} data-filtered-rows={interactionRows.rows.length} data-highlighted-rows={interactionRows.highlightRows?.length} key={visual.id}><ReportVisual visual={visual} rows={interactionRows.rows} highlightRows={interactionRows.highlightRows} selectedValue={selectedValue} activeFilters={filters} onSelect={canVisualInteract(visual.id) ? (field, value) => selectCategory(visual.id, field, value) : undefined} onFocus={setFocusedVisual} onShowData={setDataVisual} onDrillthrough={canDrillthrough ? setDrillVisual : undefined} /></div>;
+                return <div className={`report-grid-item ${mobileHidden(page, visual.id) ? "mobile-hidden" : ""}`} style={reportGridStyle(visual, page)} data-visual-title={visual.title} data-filtered-rows={interactionRows.rows.length} data-highlighted-rows={interactionRows.highlightRows?.length} key={visual.id}><ReportVisual visual={visual} rows={interactionRows.rows} highlightRows={interactionRows.highlightRows} selectedValue={selectedValue} activeFilters={filters} onSelect={canVisualInteract(visual.id) ? (field, value) => selectCategory(visual.id, field, value) : undefined} onFocus={setFocusedVisual} onShowData={setDataVisual} onDrillthrough={canDrillthrough ? setDrillVisual : undefined} /></div>;
               })}
-              {visibleControls.map((control) => <div className="report-grid-item" style={reportGridStyle(control)} key={control.id}><ReportControl control={control} pages={report.pages} bookmarks={report.bookmarks ?? []} activePageId={page.id} activeBookmarkId={activeReportBookmarkId} onAction={runReportAction} /></div>)}
+              {visibleControls.map((control) => <div className={`report-grid-item ${mobileHidden(page, control.id) ? "mobile-hidden" : ""}`} style={reportGridStyle(control, page)} key={control.id}><ReportControl control={control} pages={report.pages} bookmarks={report.bookmarks ?? []} activePageId={page.id} activeBookmarkId={activeReportBookmarkId} onAction={runReportAction} /></div>)}
             </div>
           </section>
         </ReportCanvasState>
@@ -295,13 +295,23 @@ function reportCanvasStyle(report: Report, page: ReportPage): CSSProperties {
   };
 }
 
-function reportGridStyle(visual: { x: number; y: number; w: number; h: number }): CSSProperties {
+function mobileHidden(page: ReportPage, itemId: string) {
+  if (!page.mobileLayout?.enabled) return false;
+  const item = page.mobileLayout.items.find((entry) => entry.itemId === itemId);
+  return !item || Boolean(item.hidden);
+}
+
+function reportGridStyle(visual: { id: string; x: number; y: number; w: number; h: number }, page: ReportPage): CSSProperties {
+  const mobile = page.mobileLayout?.enabled ? page.mobileLayout.items.find((item) => item.itemId === visual.id) : undefined;
   return {
     "--report-grid-column": `${visual.x + 1} / span ${visual.w}`,
     "--report-grid-row": `${visual.y + 1} / span ${visual.h}`,
     "--report-grid-height": visual.h,
     "--report-grid-compact-width": Math.min(6, visual.w),
     "--report-grid-mobile-width": Math.min(2, visual.w),
+    "--report-grid-mobile-column": mobile ? `${mobile.x + 1} / span ${mobile.w}` : `span ${Math.min(2, visual.w)}`,
+    "--report-grid-mobile-row": mobile ? `${mobile.y + 1} / span ${mobile.h}` : "auto",
+    "--report-grid-mobile-height": mobile?.h ?? visual.h,
   } as CSSProperties;
 }
 

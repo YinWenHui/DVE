@@ -88,7 +88,7 @@ export const ReportVisual = memo(function ReportVisual({ visual, rows, highlight
     const formatValue = (input: number) => visual.format === "percent" ? `${(input * 100).toFixed(1)}%` : numberFormat.format(input);
     const formatVariance = () => visual.target?.varianceFormat === "value" || target?.variancePercent === undefined ? `${target && target.variance >= 0 ? "+" : ""}${formatValue(target?.variance ?? 0)}` : `${target && target.variancePercent >= 0 ? "+" : ""}${((target?.variancePercent ?? 0) * 100).toFixed(1)}%`;
     const progress = target && target.target !== 0 ? Math.max(0, Math.min(100, Math.abs(value / target.target) * 100)) : 0;
-    return <article className="visual-card kpi-card" style={kpiStyle} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0} data-conditional-data-color={conditional.dataColor} data-conditional-background={conditional.backgroundColor} data-kpi-target={target?.target} data-kpi-achieved={target?.achieved}>
+    return <article className="visual-card kpi-card" style={kpiStyle} aria-label={visual.title} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0} data-conditional-data-color={conditional.dataColor} data-conditional-background={conditional.backgroundColor} data-kpi-target={target?.target} data-kpi-achieved={target?.achieved}>
       {actions}
       <span>{visual.display?.showTitle === false ? null : visual.title}</span>
       <strong style={{ color: conditional.textColor }} data-conditional-text={conditional.textColor}>{formatValue(value)}</strong>
@@ -96,7 +96,7 @@ export const ReportVisual = memo(function ReportVisual({ visual, rows, highlight
     </article>;
   }
 
-  if (visual.type === "table" || visual.type === "matrix") return <article className="visual-card" style={style} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0}>
+  if (visual.type === "table" || visual.type === "matrix") return <article className="visual-card" style={style} aria-label={visual.title} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0}>
     <VisualHeader visual={visual} meta={visual.type === "table" ? `${drilledRows.length} rows` : "Grouped detail"} actions={actions} />
     <div className="visual-body">{visual.type === "table" ? <ProductionTable visual={visual} rows={drilledRows} highlightRows={drilledHighlightRows} /> : <ProductionMatrix visual={visual} rows={drilledRows} highlightRows={drilledHighlightRows} />}</div>
   </article>;
@@ -105,7 +105,7 @@ export const ReportVisual = memo(function ReportVisual({ visual, rows, highlight
     const values = [...new Set(drilledRows.map((row) => String(row[visual.dimension as keyof ManufacturingRecord])))].sort();
     const selected = selectedValue ?? activeFilters[visual.dimension] ?? "";
     const highlightedValues = new Set(drilledHighlightRows?.map((row) => String(row[visual.dimension as keyof ManufacturingRecord])) ?? []);
-    return <article className="visual-card" style={style}>
+    return <article className="visual-card" style={style} aria-label={visual.title}>
       <VisualHeader visual={visual} meta="Shared filter" actions={actions} />
       <div className="visual-body"><div className="builder-tool-list">{values.map((value) => <button className={`builder-tool ${selected === value ? "active" : highlightedValues.has(value) ? "highlighted" : ""}`} key={value} onClick={() => onSelect?.(visual.dimension, value)}>{value}</button>)}</div></div>
     </article>;
@@ -160,11 +160,11 @@ function ChartVisual({ visual, rows, highlightRows, onSelect, actions, style, me
       highlightRows: highlightRows?.filter((row) => String(row[visual.smallMultipleField!] ?? "Blank") === value),
     }));
   }, [highlightRows, rows, visual.smallMultipleField]);
-  if (visual.smallMultipleField && multiples.length) return <article className="visual-card interactive" style={style} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0} data-small-multiple-count={multiples.length}>
+  if (visual.smallMultipleField && multiples.length) return <article className="visual-card interactive" style={style} aria-label={visual.title} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0} data-small-multiple-count={multiples.length}>
     <VisualHeader visual={visual} meta={`${displayFieldName(visual.smallMultipleField)} small multiples`} actions={actions} />
     <div className="visual-body small-multiples-grid">{multiples.map((multiple) => <section className="small-multiple" key={multiple.value}><strong>{multiple.value}</strong><EChart option={chartOption({ ...visual, smallMultipleField: undefined }, multiple.rows, multiple.highlightRows)} onSelect={onSelect ? select : undefined} /></section>)}</div>
   </article>;
-  return <article className="visual-card interactive" style={style} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0}>
+  return <article className="visual-card interactive" style={style} aria-label={visual.title} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0}>
     <VisualHeader visual={visual} meta={meta} actions={actions} />
     <div className="visual-body"><EChart option={option} onSelect={onSelect ? select : undefined} /></div>
   </article>;

@@ -214,6 +214,20 @@ export interface ReportPageCanvasOptions {
   gridSize?: 1 | 2 | 3;
 }
 
+export interface ReportMobileLayoutItem {
+  itemId: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  hidden?: boolean;
+}
+
+export interface ReportMobileLayoutDefinition {
+  enabled: boolean;
+  items: ReportMobileLayoutItem[];
+}
+
 export interface VisualInteractionOptions {
   crossFilter?: boolean;
   tooltips?: boolean;
@@ -357,6 +371,7 @@ export interface ReportPage {
   controls?: ReportControlDefinition[];
   interactions?: VisualInteractionDefinition[];
   canvas?: ReportPageCanvasOptions;
+  mobileLayout?: ReportMobileLayoutDefinition;
 }
 
 export interface Report {

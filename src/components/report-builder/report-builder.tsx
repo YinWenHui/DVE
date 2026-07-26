@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import GridLayout, { type Layout } from "react-grid-layout";
-import { Ban, BarChart3, Bookmark, Check, ChevronDown, ChevronUp, Clipboard, Copy, CreditCard, Eye, EyeOff, Filter, ImageIcon, Layers3, LineChart, ListTree, MousePointerClick, Navigation, Paintbrush, Plus, Redo2, RotateCcw, Save, SlidersHorizontal, Sparkles, Square, Table2, Trash2, Type, Undo2 } from "lucide-react";
+import { Ban, BarChart3, Bookmark, Check, ChevronDown, ChevronUp, Clipboard, Contrast, Copy, CreditCard, Eye, EyeOff, Filter, ImageIcon, Layers3, LineChart, ListTree, Monitor, MousePointerClick, Navigation, Paintbrush, Plus, Redo2, RotateCcw, Save, ShieldCheck, SlidersHorizontal, Smartphone, Sparkles, Square, Table2, Trash2, Type, Undo2, WandSparkles } from "lucide-react";
 import { ReportControl } from "@/components/report/report-control";
 import { ReportVisual } from "@/components/report/report-visual";
-import { snapReportLayout } from "@/lib/report-authoring";
+import { createMobileLayout, nudgeLayoutItem, snapReportLayout } from "@/lib/report-authoring";
+import { auditReportPage, contrastRatio } from "@/lib/report-accessibility";
 import { defaultMatrixColumns, defaultTableColumns, resolvedMatrixRows, resolvedTabularColumns } from "@/lib/tabular";
-import type { Aggregation, ConditionalFormattingOperator, ConditionalFormattingRule, Dataset, ManufacturingRecord, Report, ReportActionType, ReportBookmarkDefinition, ReportControlDefinition, ReportControlType, ReportFilterDefinition, ReportFormatPreset, ReportPage, ReportPageCanvasOptions, ReportThemeDefinition, TabularColumnDefinition, VisualDefinition, VisualInteractionMode, VisualType } from "@/types";
+import type { Aggregation, ConditionalFormattingOperator, ConditionalFormattingRule, Dataset, ManufacturingRecord, Report, ReportActionType, ReportBookmarkDefinition, ReportControlDefinition, ReportControlType, ReportFilterDefinition, ReportFormatPreset, ReportMobileLayoutItem, ReportPage, ReportPageCanvasOptions, ReportThemeDefinition, TabularColumnDefinition, VisualDefinition, VisualInteractionMode, VisualType } from "@/types";
 
 const tools: Array<{ type: VisualType; label: string; icon: typeof BarChart3 }> = [
   { type: "kpi", label: "KPI card", icon: CreditCard },
@@ -30,7 +31,8 @@ const tools: Array<{ type: VisualType; label: string; icon: typeof BarChart3 }> 
   { type: "slicer", label: "Slicer", icon: SlidersHorizontal },
 ];
 
-type SettingsTab = "build" | "format" | "filters" | "selection";
+type SettingsTab = "build" | "format" | "filters" | "selection" | "accessibility";
+type CanvasMode = "desktop" | "mobile";
 
 const defaultTheme: ReportThemeDefinition = {
   name: "Digital Verse",
@@ -70,6 +72,8 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   const [selectedId, setSelectedId] = useState<string>();
   const [selectedBookmarkId, setSelectedBookmarkId] = useState<string>();
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("build");
+  const [canvasMode, setCanvasMode] = useState<CanvasMode>("desktop");
+  const [highContrastPreview, setHighContrastPreview] = useState(false);
   const [message, setMessage] = useState<string>();
   const [clipboard, setClipboard] = useState<BuilderClipboard>();
   const [historyDepth, setHistoryDepth] = useState({ undo: 0, redo: 0 });
@@ -84,10 +88,18 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   const measures = selectedDataset?.fields.filter((field) => !field.hidden && field.semanticType === "measure") ?? [];
   const filterFields = selectedDataset?.fields.filter((field) => !field.hidden && field.filterable) ?? [];
   const previewRows = records as unknown as ManufacturingRecord[];
-  const layout = useMemo<Layout[]>(() => [
+  const desktopLayout = useMemo<Layout[]>(() => [
     ...(page?.visuals.filter((visual) => !visual.hidden).map((visual) => ({ i: visual.id, x: visual.x, y: visual.y, w: visual.w, h: visual.h, minW: 2, minH: 2 })) ?? []),
     ...(page?.controls?.filter((control) => !control.hidden).map((control) => ({ i: control.id, x: control.x, y: control.y, w: control.w, h: control.h, minW: 2, minH: 1 })) ?? []),
   ], [page]);
+  const mobileLayout = useMemo<Layout[]>(() => {
+    const configured = page?.mobileLayout?.enabled ? page.mobileLayout.items : undefined;
+    if (!configured) return createMobileLayout(desktopLayout).map((item) => ({ ...item, minW: 1, minH: 1 }));
+    const visibleIds = new Set(desktopLayout.map((item) => item.i));
+    return configured.filter((item) => visibleIds.has(item.itemId) && !item.hidden).map((item) => ({ i: item.itemId, x: item.x, y: item.y, w: item.w, h: item.h, minW: 1, minH: 1 }));
+  }, [desktopLayout, page]);
+  const layout = canvasMode === "mobile" ? mobileLayout : desktopLayout;
+  const builderVisibleIds = useMemo(() => new Set(layout.map((item) => item.i)), [layout]);
   const canUndo = historyDepth.undo > 0;
   const canRedo = historyDepth.redo > 0;
 
@@ -190,7 +202,9 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
 
   function updatePage(nextPage: ReportPage, recordHistory = true) {
     if (recordHistory) checkpoint();
-    setPages((current) => current.map((item, index) => index === pageIndex ? nextPage : item));
+    const validIds = new Set([...nextPage.visuals.map((visual) => visual.id), ...(nextPage.controls ?? []).map((control) => control.id)]);
+    const normalizedPage = nextPage.mobileLayout ? { ...nextPage, mobileLayout: { ...nextPage.mobileLayout, items: nextPage.mobileLayout.items.filter((item) => validIds.has(item.itemId)) } } : nextPage;
+    setPages((current) => current.map((item, index) => index === pageIndex ? normalizedPage : item));
   }
 
   function updateSelected(changes: Partial<VisualDefinition>) {
@@ -237,6 +251,15 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
 
   function changeLayout(next: Layout[]) {
     if (!page) return;
+    if (canvasMode === "mobile") {
+      const updatedIds = new Set(next.map((item) => item.i));
+      const preserved = (page.mobileLayout?.items ?? []).filter((item) => !updatedIds.has(item.itemId));
+      const items: ReportMobileLayoutItem[] = [...next.map((item) => ({ itemId: item.i, x: item.x, y: item.y, w: item.w, h: item.h })), ...preserved];
+      const current = page.mobileLayout?.items ?? [];
+      const changed = !page.mobileLayout?.enabled || JSON.stringify(current) !== JSON.stringify(items);
+      if (changed) updatePage({ ...page, mobileLayout: { enabled: true, items } }, false);
+      return;
+    }
     const canvas = page.canvas ?? {};
     const normalized = snapReportLayout(next, canvas.snapToGrid !== false, canvas.gridSize ?? 1);
     let changed = false;
@@ -263,13 +286,15 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   function duplicatePage() {
     if (!page) return;
     const visualIds = new Map(page.visuals.map((visual) => [visual.id, crypto.randomUUID()]));
+    const controlIds = new Map((page.controls ?? []).map((control) => [control.id, crypto.randomUUID()]));
     const next: ReportPage = {
       ...structuredClone(page),
       id: crypto.randomUUID(),
       name: `${page.name} copy`,
       ordinal: pages.length,
       visuals: page.visuals.map((visual) => ({ ...visual, id: visualIds.get(visual.id)! })),
-      controls: page.controls?.map((control) => ({ ...control, id: crypto.randomUUID() })),
+      controls: page.controls?.map((control) => ({ ...control, id: controlIds.get(control.id)! })),
+      mobileLayout: page.mobileLayout ? { ...page.mobileLayout, items: page.mobileLayout.items.flatMap((item) => { const itemId = visualIds.get(item.itemId) ?? controlIds.get(item.itemId); return itemId ? [{ ...item, itemId }] : []; }) } : undefined,
       interactions: page.interactions?.flatMap((interaction) => {
         const sourceVisualId = visualIds.get(interaction.sourceVisualId);
         const targetVisualId = visualIds.get(interaction.targetVisualId);
@@ -376,6 +401,20 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
     updatePage({ ...page, visuals: page.visuals.map((visual) => visual.id === id ? { ...visual, hidden } : visual), controls: page.controls?.map((control) => control.id === id ? { ...control, hidden } : control) });
   }
 
+  function resetMobileLayout() {
+    if (!page) return;
+    const items = createMobileLayout(desktopLayout).map((item) => ({ itemId: item.i, x: item.x, y: item.y, w: item.w, h: item.h }));
+    updatePage({ ...page, mobileLayout: { enabled: true, items } });
+  }
+
+  function updateMobileVisibility(id: string, hidden: boolean) {
+    if (!page) return;
+    const base: ReportMobileLayoutItem[] = page.mobileLayout?.enabled ? page.mobileLayout.items : createMobileLayout(desktopLayout).map((item) => ({ itemId: item.i, x: item.x, y: item.y, w: item.w, h: item.h }));
+    const exists = base.some((item) => item.itemId === id);
+    const items = exists ? base.map((item) => item.itemId === id ? { ...item, hidden } : item) : [...base, { itemId: id, x: 0, y: Math.max(0, ...base.map((item) => item.y + item.h)), w: 2, h: 2, hidden }];
+    updatePage({ ...page, mobileLayout: { enabled: true, items } });
+  }
+
   function moveItem(id: string, direction: -1 | 1) {
     if (!page) return;
     const reorder = <T extends { id: string }>(items: T[]): T[] => {
@@ -389,19 +428,47 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
     updatePage({ ...page, visuals: reorder(page.visuals), controls: reorder(page.controls ?? []) });
   }
 
+  function nudgeSelection(key: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown", resize: boolean) {
+    if (!page || !selectedId) return;
+    if (canvasMode === "mobile") {
+      const base: ReportMobileLayoutItem[] = page.mobileLayout?.enabled ? page.mobileLayout.items : createMobileLayout(desktopLayout).map((item) => ({ itemId: item.i, x: item.x, y: item.y, w: item.w, h: item.h }));
+      const items = base.map((item) => item.itemId === selectedId ? { ...nudgeLayoutItem({ i: item.itemId, x: item.x, y: item.y, w: item.w, h: item.h }, key, resize, 2), itemId: item.itemId, hidden: item.hidden } : item);
+      updatePage({ ...page, mobileLayout: { enabled: true, items } });
+      return;
+    }
+    const update = <T extends { id: string; x: number; y: number; w: number; h: number },>(items: T[]) => items.map((item) => item.id === selectedId ? (() => { const next = nudgeLayoutItem({ i: item.id, x: item.x, y: item.y, w: item.w, h: item.h }, key, resize, 12); return { ...item, x: next.x, y: next.y, w: next.w, h: next.h }; })() : item);
+    updatePage({ ...page, visuals: update(page.visuals), controls: update(page.controls ?? []) });
+  }
+
+  function deleteSelection() {
+    if (!page || !selectedId) return;
+    const visualExists = page.visuals.some((visual) => visual.id === selectedId);
+    const controlExists = page.controls?.some((control) => control.id === selectedId);
+    if (!visualExists && !controlExists) return;
+    updatePage({ ...page, visuals: page.visuals.filter((visual) => visual.id !== selectedId), controls: page.controls?.filter((control) => control.id !== selectedId), interactions: page.interactions?.filter((interaction) => interaction.sourceVisualId !== selectedId && interaction.targetVisualId !== selectedId), mobileLayout: page.mobileLayout ? { ...page.mobileLayout, items: page.mobileLayout.items.filter((item) => item.itemId !== selectedId) } : undefined });
+    setSelectedId(undefined);
+  }
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
-      if (!(event.ctrlKey || event.metaKey)) return;
       const key = event.key.toLocaleLowerCase();
+      if (["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key) && selectedId) { event.preventDefault(); nudgeSelection((`Arrow${key.slice(5, 6).toUpperCase()}${key.slice(6)}`) as "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown", event.shiftKey); return; }
+      if (!(event.ctrlKey || event.metaKey)) return;
       if (key === "z") { event.preventDefault(); if (event.shiftKey) redo(); else undo(); }
       else if (key === "y") { event.preventDefault(); redo(); }
       else if (key === "c") { event.preventDefault(); copySelection(); }
       else if (key === "v") { event.preventDefault(); pasteSelection(); }
     };
+    const handleDelete = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedId) { event.preventDefault(); deleteSelection(); }
+    };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleDelete);
+    return () => { window.removeEventListener("keydown", handleKeyDown); window.removeEventListener("keydown", handleDelete); };
   });
 
   async function save(status: Report["status"] = initial?.status ?? "draft") {
@@ -439,22 +506,23 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
         <div className="panel-header builder-section-heading"><div><h3>Report bookmarks</h3><p>{bookmarks.length} published views</p></div><button className="icon-button" onClick={addBookmark} aria-label="Add report bookmark"><Plus size={14} /></button></div>
         <div className="builder-tool-list">{bookmarks.map((bookmark) => <button className={`builder-tool ${bookmark.id === selectedBookmarkId ? "active" : ""}`} key={bookmark.id} onClick={() => { setSelectedBookmarkId(bookmark.id); setSelectedId(undefined); setSettingsTab("build"); }}><Bookmark size={13} />{bookmark.name}</button>)}{!bookmarks.length && <p className="muted filter-empty">Add a shared view for buttons and bookmark navigators.</p>}</div>
       </aside>
-      <section className="builder-canvas">
-        <div className="builder-canvas-label"><span>Canvas</span><div className="builder-canvas-toolbar" role="toolbar" aria-label="Canvas editing"><button className="icon-button" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={undo}><Undo2 size={14} /></button><button className="icon-button" aria-label="Redo" title="Redo (Ctrl+Y)" disabled={!canRedo} onClick={redo}><Redo2 size={14} /></button><button className="icon-button" aria-label="Copy selected item" title="Copy (Ctrl+C)" disabled={!selected && !selectedControl} onClick={copySelection}><Copy size={14} /></button><button className="icon-button" aria-label="Paste copied item" title="Paste (Ctrl+V)" disabled={!clipboard} onClick={pasteSelection}><Clipboard size={14} /></button><small>Drag headers to move · drag corners to resize</small></div></div>
-        <div className="builder-grid-stage" data-show-grid={page?.canvas?.showGrid !== false} style={builderCanvasStyle(page, theme)}>
-          <GridLayout layout={layout} cols={12} rowHeight={54} width={900} margin={[8, 8]} onLayoutChange={changeLayout} onDragStart={checkpoint} onResizeStart={checkpoint} draggableHandle=".builder-visual-handle">
-            {page?.visuals.filter((visual) => !visual.hidden).map((visual) => <div key={visual.id} onClick={() => { setSelectedId(visual.id); setSelectedBookmarkId(undefined); }}><div className={`builder-preview ${selectedId === visual.id ? "selected" : ""}`}><button className="builder-visual-handle" aria-label={`Move ${visual.title}`}>{visual.title}</button><div className="builder-preview-body"><ReportVisual visual={visual} rows={previewRows} showActions={false} /></div></div></div>)}
-            {page?.controls?.filter((control) => !control.hidden).map((control) => <div key={control.id} onClick={() => { setSelectedId(control.id); setSelectedBookmarkId(undefined); }}><div className={`builder-preview ${selectedId === control.id ? "selected" : ""}`}><button className="builder-visual-handle" aria-label={`Move ${control.title}`}>{control.title}</button><div className="builder-preview-body"><ReportControl control={control} pages={pages} bookmarks={bookmarks} activePageId={page.id} /></div></div></div>)}
+      <section className={`builder-canvas canvas-${canvasMode}`}>
+        <div className="builder-canvas-label"><span>{canvasMode === "mobile" ? "Mobile canvas" : "Desktop canvas"}</span><div className="builder-canvas-toolbar" role="toolbar" aria-label="Canvas editing"><button className={`icon-button ${canvasMode === "desktop" ? "active" : ""}`} aria-label="Desktop layout" aria-pressed={canvasMode === "desktop"} onClick={() => setCanvasMode("desktop")}><Monitor size={14} /></button><button className={`icon-button ${canvasMode === "mobile" ? "active" : ""}`} aria-label="Mobile layout" aria-pressed={canvasMode === "mobile"} onClick={() => setCanvasMode("mobile")}><Smartphone size={14} /></button>{canvasMode === "mobile" && <button className="icon-button" aria-label="Auto arrange mobile layout" title="Auto arrange mobile layout" onClick={resetMobileLayout}><WandSparkles size={14} /></button>}<button className={`icon-button ${highContrastPreview ? "active" : ""}`} aria-label="High contrast preview" aria-pressed={highContrastPreview} onClick={() => setHighContrastPreview((current) => !current)}><Contrast size={14} /></button><button className="icon-button" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={undo}><Undo2 size={14} /></button><button className="icon-button" aria-label="Redo" title="Redo (Ctrl+Y)" disabled={!canRedo} onClick={redo}><Redo2 size={14} /></button><button className="icon-button" aria-label="Copy selected item" title="Copy (Ctrl+C)" disabled={!selected && !selectedControl} onClick={copySelection}><Copy size={14} /></button><button className="icon-button" aria-label="Paste copied item" title="Paste (Ctrl+V)" disabled={!clipboard} onClick={pasteSelection}><Clipboard size={14} /></button><small>Arrow keys move · Shift + arrows resize</small></div></div>
+        <div className={`builder-grid-stage ${canvasMode === "mobile" ? "mobile" : ""}`} data-show-grid={page?.canvas?.showGrid !== false} data-high-contrast={highContrastPreview} style={builderCanvasStyle(page, theme)}>
+          <GridLayout layout={layout} cols={canvasMode === "mobile" ? 2 : 12} rowHeight={canvasMode === "mobile" ? 68 : 54} width={canvasMode === "mobile" ? 360 : 900} margin={[8, 8]} onLayoutChange={changeLayout} onDragStart={checkpoint} onResizeStart={checkpoint} draggableHandle=".builder-visual-handle">
+            {page?.visuals.filter((visual) => !visual.hidden && builderVisibleIds.has(visual.id)).map((visual) => <div key={visual.id} onClick={() => { setSelectedId(visual.id); setSelectedBookmarkId(undefined); }}><div className={`builder-preview ${selectedId === visual.id ? "selected" : ""}`}><button className="builder-visual-handle" aria-label={`Move ${visual.title}`}>{visual.title}</button><div className="builder-preview-body"><ReportVisual visual={visual} rows={previewRows} showActions={false} /></div></div></div>)}
+            {page?.controls?.filter((control) => !control.hidden && builderVisibleIds.has(control.id)).map((control) => <div key={control.id} onClick={() => { setSelectedId(control.id); setSelectedBookmarkId(undefined); }}><div className={`builder-preview ${selectedId === control.id ? "selected" : ""}`}><button className="builder-visual-handle" aria-label={`Move ${control.title}`}>{control.title}</button><div className="builder-preview-body"><ReportControl control={control} pages={pages} bookmarks={bookmarks} activePageId={page.id} /></div></div></div>)}
           </GridLayout>
         </div>
         {!page?.visuals.length && !page?.controls?.length && <div className="empty-state">Add a visual or navigation control from the left pane, then drag and resize it on this canvas.</div>}
       </section>
       <aside className="builder-pane builder-settings-pane">
-        <div className="builder-settings-tabs"><button className={settingsTab === "build" ? "active" : ""} onClick={() => setSettingsTab("build")}><Layers3 size={14} /> Build</button><button className={settingsTab === "format" ? "active" : ""} onClick={() => setSettingsTab("format")}><Paintbrush size={14} /> Format</button><button className={settingsTab === "filters" ? "active" : ""} onClick={() => setSettingsTab("filters")}><SlidersHorizontal size={14} /> Filters</button><button className={settingsTab === "selection" ? "active" : ""} onClick={() => setSettingsTab("selection")}><ListTree size={14} /> Selection</button></div>
+        <div className="builder-settings-tabs"><button className={settingsTab === "build" ? "active" : ""} onClick={() => setSettingsTab("build")}><Layers3 size={14} /> Build</button><button className={settingsTab === "format" ? "active" : ""} onClick={() => setSettingsTab("format")}><Paintbrush size={14} /> Format</button><button className={settingsTab === "filters" ? "active" : ""} onClick={() => setSettingsTab("filters")}><SlidersHorizontal size={14} /> Filters</button><button className={settingsTab === "selection" ? "active" : ""} onClick={() => setSettingsTab("selection")}><ListTree size={14} /> Selection</button><button className={settingsTab === "accessibility" ? "active" : ""} onClick={() => setSettingsTab("accessibility")}><ShieldCheck size={14} /> Inspect</button></div>
         {settingsTab === "build" && (selected ? <BuildSettings selected={selected} dimensions={dimensions} measures={measures} updateSelected={updateSelected} onDelete={() => { if (!page) return; updatePage({ ...page, visuals: page.visuals.filter((visual) => visual.id !== selected.id), interactions: page.interactions?.filter((interaction) => interaction.sourceVisualId !== selected.id && interaction.targetVisualId !== selected.id) }); setSelectedId(undefined); }} /> : selectedControl ? <ControlBuildSettings selected={selectedControl} pages={pages} bookmarks={bookmarks} updateSelected={updateSelectedControl} onDelete={() => { if (!page) return; updatePage({ ...page, controls: (page.controls ?? []).filter((control) => control.id !== selectedControl.id) }); setSelectedId(undefined); }} /> : selectedBookmark ? <BookmarkSettings selected={selectedBookmark} pages={pages} rows={previewRows} updateSelected={updateBookmark} onDelete={() => deleteBookmark(selectedBookmark.id)} /> : <div className="empty-state compact">Select a visual, control, or report bookmark to configure it.</div>)}
         {settingsTab === "format" && <div className="builder-format-stack"><ReportFormatSettings theme={theme} page={page} updateTheme={updateReportTheme} updateCanvas={updatePageCanvas} applyTheme={applyThemeToVisuals} />{selected ? <FormatSettings selected={selected} page={page} measures={measures} presets={formatPresets} updateSelected={updateSelected} updateDisplay={updateDisplay} updateInteraction={updateInteraction} updateVisualInteraction={updateVisualInteraction} savePreset={saveFormatPreset} deletePreset={deleteFormatPreset} /> : selectedControl ? <ControlFormatSettings selected={selectedControl} updateSelected={updateSelectedControl} /> : <p className="muted filter-empty">Select a visual or control for item formatting. Report and page styling remains available above.</p>}</div>}
         {settingsTab === "filters" && <div className="builder-filter-scopes">{selected && <FilterEditor title="Filters on this visual" filters={selected.filters ?? []} fields={filterFields} onChange={(filters) => updateSelected({ filters })} />}<FilterEditor title="Filters on this page" filters={page?.filters ?? []} fields={filterFields} onChange={(filters) => page && updatePage({ ...page, filters })} /><FilterEditor title="Filters on all pages" filters={reportFilters} fields={filterFields} onChange={(filters) => { checkpoint(); setReportFilters(filters); }} /></div>}
-        {settingsTab === "selection" && page && <SelectionPane page={page} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setSelectedBookmarkId(undefined); }} onVisibility={updateItemVisibility} onMove={moveItem} />}
+        {settingsTab === "selection" && page && <SelectionPane page={page} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setSelectedBookmarkId(undefined); }} onVisibility={updateItemVisibility} onMobileVisibility={updateMobileVisibility} onMove={moveItem} />}
+        {settingsTab === "accessibility" && page && <AccessibilityPane page={page} theme={theme} onSelect={(id) => { setSelectedId(id); setSelectedBookmarkId(undefined); }} highContrast={highContrastPreview} onToggleHighContrast={() => setHighContrastPreview((current) => !current)} />}
       </aside>
     </div>
   </>;
@@ -582,11 +650,19 @@ function ReportFormatSettings({ theme, page, updateTheme, updateCanvas, applyThe
   </div>;
 }
 
-function SelectionPane({ page, selectedId, onSelect, onVisibility, onMove }: { page: ReportPage; selectedId?: string; onSelect: (id: string) => void; onVisibility: (id: string, hidden: boolean) => void; onMove: (id: string, direction: -1 | 1) => void }) {
+function SelectionPane({ page, selectedId, onSelect, onVisibility, onMobileVisibility, onMove }: { page: ReportPage; selectedId?: string; onSelect: (id: string) => void; onVisibility: (id: string, hidden: boolean) => void; onMobileVisibility: (id: string, hidden: boolean) => void; onMove: (id: string, direction: -1 | 1) => void }) {
   const visuals = page.visuals.map((item, index) => ({ ...item, kind: "Visual", order: index, count: page.visuals.length }));
   const controls = (page.controls ?? []).map((item, index, collection) => ({ ...item, kind: ["textBox", "shape", "image"].includes(item.type) ? "Object" : "Control", order: index, count: collection.length }));
   const items = [...visuals, ...controls];
-  return <div className="form-stack"><div className="panel-header"><div><h3>Selection pane</h3><p>Visibility and canvas order</p></div></div><div className="selection-list">{items.map((item) => <div className={`selection-item ${item.id === selectedId ? "selected" : ""}`} key={item.id}><button className="selection-name" type="button" onClick={() => onSelect(item.id)}><span>{item.kind}</span><strong>{item.title}</strong></button><button className="icon-button" type="button" aria-label={`${item.hidden ? "Show" : "Hide"} ${item.title}`} aria-pressed={Boolean(item.hidden)} onClick={() => onVisibility(item.id, !item.hidden)}>{item.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button><button className="icon-button" type="button" aria-label={`Move ${item.title} earlier`} disabled={item.order === 0} onClick={() => onMove(item.id, -1)}><ChevronUp size={13} /></button><button className="icon-button" type="button" aria-label={`Move ${item.title} later`} disabled={item.order === item.count - 1} onClick={() => onMove(item.id, 1)}><ChevronDown size={13} /></button></div>)}</div>{!items.length && <div className="empty-state compact">This page has no report objects.</div>}</div>;
+  return <div className="form-stack"><div className="panel-header"><div><h3>Selection pane</h3><p>Desktop/mobile visibility and canvas order</p></div></div><div className="selection-list">{items.map((item) => { const mobileItem = page.mobileLayout?.items.find((entry) => entry.itemId === item.id); const mobileHidden = page.mobileLayout?.enabled ? !mobileItem || Boolean(mobileItem.hidden) : false; return <div className={`selection-item ${item.id === selectedId ? "selected" : ""}`} key={item.id}><button className="selection-name" type="button" onClick={() => onSelect(item.id)}><span>{item.kind}</span><strong>{item.title}</strong></button><button className="icon-button" type="button" aria-label={`${item.hidden ? "Show" : "Hide"} ${item.title}`} aria-pressed={Boolean(item.hidden)} title="Desktop and mobile visibility" onClick={() => onVisibility(item.id, !item.hidden)}>{item.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button><button className={`icon-button ${mobileHidden ? "muted" : ""}`} type="button" aria-label={`${mobileHidden ? "Show" : "Hide"} ${item.title} on mobile`} aria-pressed={mobileHidden} title="Mobile visibility" onClick={() => onMobileVisibility(item.id, !mobileHidden)}><Smartphone size={13} /></button><button className="icon-button" type="button" aria-label={`Move ${item.title} earlier`} disabled={item.order === 0} onClick={() => onMove(item.id, -1)}><ChevronUp size={13} /></button><button className="icon-button" type="button" aria-label={`Move ${item.title} later`} disabled={item.order === item.count - 1} onClick={() => onMove(item.id, 1)}><ChevronDown size={13} /></button></div>; })}</div>{!items.length && <div className="empty-state compact">This page has no report objects.</div>}</div>;
+}
+
+function AccessibilityPane({ page, theme, onSelect, highContrast, onToggleHighContrast }: { page: ReportPage; theme: ReportThemeDefinition; onSelect: (id: string) => void; highContrast: boolean; onToggleHighContrast: () => void }) {
+  const issues = auditReportPage(page, theme);
+  const errors = issues.filter((issue) => issue.severity === "error").length;
+  const textRatio = contrastRatio(theme.textColor, theme.surfaceColor);
+  const accentRatio = contrastRatio(theme.accentColor, theme.surfaceColor);
+  return <div className="form-stack accessibility-pane"><div className="panel-header"><div><h3>Accessibility inspector</h3><p>Names, alternatives, contrast, and mobile placement</p></div></div><div className={`accessibility-summary ${errors ? "failed" : "passed"}`}><ShieldCheck size={18} /><div><strong>{errors ? `${errors} blocking ${errors === 1 ? "issue" : "issues"}` : "No blocking issues"}</strong><span>{issues.length - errors} warnings · {page.visuals.length + (page.controls?.length ?? 0)} objects inspected</span></div></div><div className="settings-group"><strong>Contrast validation</strong><div className="contrast-result"><span>Text / surface</span><b className={(textRatio ?? 0) >= 4.5 ? "passed" : "failed"}>{textRatio?.toFixed(2) ?? "—"}:1</b></div><div className="contrast-result"><span>Accent / surface</span><b className={(accentRatio ?? 0) >= 3 ? "passed" : "failed"}>{accentRatio?.toFixed(2) ?? "—"}:1</b></div><button className={`button ${highContrast ? "active" : ""}`} type="button" aria-pressed={highContrast} onClick={onToggleHighContrast}><Contrast size={13} /> {highContrast ? "Exit high contrast preview" : "Preview high contrast"}</button></div><div className="accessibility-issues">{issues.map((issue) => <button type="button" className={`accessibility-issue ${issue.severity}`} data-a11y-issue={issue.code} key={issue.id} onClick={() => issue.itemId && onSelect(issue.itemId)} disabled={!issue.itemId}><span>{issue.severity}</span><strong>{issue.message}</strong></button>)}</div>{!issues.length && <div className="empty-state compact">This page passes the current automated authoring checks. Manual keyboard and screen-reader review is still recommended.</div>}<div className="settings-group keyboard-help"><strong>Keyboard editing</strong><span><kbd>Arrow keys</kbd> Move selected object</span><span><kbd>Shift</kbd> + <kbd>Arrow</kbd> Resize</span><span><kbd>Delete</kbd> Remove</span><span><kbd>Ctrl</kbd> + <kbd>C/V/Z/Y</kbd> Copy, paste, undo, redo</span></div></div>;
 }
 
 function FormatSettings({ selected, page, measures, presets, updateSelected, updateDisplay, updateInteraction, updateVisualInteraction, savePreset, deletePreset }: { selected: VisualDefinition; page: ReportPage; measures: Dataset["fields"]; presets: ReportFormatPreset[]; updateSelected: (changes: Partial<VisualDefinition>) => void; updateDisplay: (changes: NonNullable<VisualDefinition["display"]>) => void; updateInteraction: (changes: NonNullable<VisualDefinition["interaction"]>) => void; updateVisualInteraction: (sourceVisualId: string, targetVisualId: string, mode: VisualInteractionMode) => void; savePreset: (name: string) => void; deletePreset: (id: string) => void }) {

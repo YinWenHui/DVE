@@ -198,7 +198,11 @@ export const seedReports: Report[] = reportNames.map(([name, slug, description],
     { id: `bookmark-${index + 1}-line-a`, name: "Line A focus", pageId: `page-${index + 1}-overview`, filters: { Line: "Line A" } },
   ],
   pages: [
-    { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, canvas: { backgroundColor: "#eef2f8", showGrid: true, snapToGrid: true, gridSize: 1 }, filters: [{ id: `filter-${index + 1}-top-model-context`, field: "Model", operator: "equals", value: "", mode: "topN", topN: { direction: "top", count: 2, byMeasure: "ActualQty", aggregation: "sum" } }], visuals: baseVisuals(index + 1), interactions: baseInteractions(index + 1, true), controls: [
+    { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, canvas: { backgroundColor: "#eef2f8", showGrid: true, snapToGrid: true, gridSize: 1 }, mobileLayout: index === 0 ? { enabled: true, items: [
+      { itemId: "v-1-plan", x: 0, y: 0, w: 1, h: 2 }, { itemId: "v-1-actual", x: 1, y: 0, w: 1, h: 2 }, { itemId: "v-1-gap", x: 0, y: 2, w: 1, h: 2 }, { itemId: "v-1-achievement", x: 1, y: 2, w: 1, h: 2 }, { itemId: "v-1-yield", x: 0, y: 4, w: 1, h: 2 }, { itemId: "v-1-pending", x: 1, y: 4, w: 1, h: 2 },
+      { itemId: "v-1-bar", x: 0, y: 6, w: 2, h: 5 }, { itemId: "v-1-line", x: 0, y: 11, w: 2, h: 5 }, { itemId: "v-1-donut", x: 0, y: 16, w: 2, h: 5 }, { itemId: "v-1-matrix", x: 0, y: 21, w: 2, h: 5 }, { itemId: "v-1-slicer", x: 0, y: 26, w: 2, h: 3 },
+      { itemId: "control-1-pages", x: 0, y: 29, w: 2, h: 1 }, { itemId: "control-1-bookmarks", x: 0, y: 30, w: 2, h: 1 }, { itemId: "control-1-detail", x: 0, y: 31, w: 2, h: 1 }, { itemId: "control-1-note", x: 0, y: 32, w: 2, h: 2 }, { itemId: "control-1-shape", x: 0, y: 34, w: 1, h: 2, hidden: true }, { itemId: "control-1-image", x: 1, y: 34, w: 1, h: 2 },
+    ] } : undefined, filters: [{ id: `filter-${index + 1}-top-model-context`, field: "Model", operator: "equals", value: "", mode: "topN", topN: { direction: "top", count: 2, byMeasure: "ActualQty", aggregation: "sum" } }], visuals: baseVisuals(index + 1), interactions: baseInteractions(index + 1, true), controls: [
       { id: `control-${index + 1}-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 15, w: 6, h: 1 },
       { id: `control-${index + 1}-bookmarks`, type: "bookmarkNavigator", title: "Saved views", x: 6, y: 15, w: 6, h: 1 },
       { id: `control-${index + 1}-detail`, type: "button", title: "Open detail", x: 0, y: 16, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-detail` } },

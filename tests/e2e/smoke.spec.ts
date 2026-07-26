@@ -1,89 +1,690 @@
 import { expect, test } from "@playwright/test";
 
-test("mock administrator opens the seeded application and uses report controls", async ({ page }) => {
+test("mock administrator opens the seeded application and uses report controls", async ({
+  page,
+}) => {
   test.setTimeout(120_000);
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.message));
-  page.on("console", (message) => { if (message.type() === "error") browserErrors.push(message.text()); });
+  page.on("console", (message) => {
+    if (message.type() === "error") browserErrors.push(message.text());
+  });
   await page.setViewportSize({ width: 950, height: 1050 });
-  await page.goto("/login"); await expect(page.getByRole("heading", { name: "Sign in to continue" })).toBeVisible();
-  await page.getByRole("button", { name: /Administrator/ }).click(); await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 });
-  await page.getByRole("link", { name: /Digital Verse Demo/ }).click(); await expect(page).toHaveURL(/\/app\/digital-verse-demo\/report\//, { timeout: 20_000 });
-  await expect(page.getByText("Daily Report")).toBeVisible(); await expect(page.getByText("Actual by Line")).toBeVisible();
-  await expect(page.locator('[data-visual-title="Achievement"] article')).toHaveAttribute("data-conditional-data-color", "#18a66a"); await expect(page.locator('[data-visual-title="Actual by Line"] article')).toHaveAttribute("data-conditional-rule-count", "3"); await expect(page.locator('[data-visual-title="Output Trend"] article')).toHaveAttribute("data-small-multiple-count", "2"); const productionDetail = page.locator('[data-visual-title="Production Detail"]'); await expect(productionDetail.locator('td[data-conditional-background]').first()).toBeVisible(); await expect(productionDetail.locator('td[data-conditional-bar]').first()).toBeVisible();
-  await expect(page.locator('[data-visual-title="Actual"] article')).toHaveAttribute("data-kpi-target", /\d+/); await expect(page.locator('[data-visual-title="Actual"] article')).toContainText("Target"); await expect(productionDetail.locator(".data-table-wrap")).toHaveAttribute("data-column-count", "8"); await expect(productionDetail.getByRole("columnheader", { name: "Production date" })).toBeVisible(); await expect(productionDetail.getByRole("columnheader", { name: "Variance" })).toBeVisible(); await expect(page.locator('[data-object-type="textBox"]')).toContainText("DC line performance"); await expect(page.getByRole("img", { name: "Blue decorative ellipse" })).toBeVisible(); await expect(page.getByRole("img", { name: "Digital Verse DV mark" })).toBeVisible();
-  const planCard = page.locator('[data-visual-title="Plan"]'); const actualCard = page.locator('[data-visual-title="Actual"]'); const gapCard = page.locator('[data-visual-title="Gap"]'); const planBefore = await planCard.locator("strong").textContent(); const gapBefore = await gapCard.locator("strong").textContent(); const lineSlicer = page.locator("article.visual-card", { has: page.getByText("Line slicer", { exact: true }) }); await lineSlicer.getByRole("button", { name: "Line A", exact: true }).dispatchEvent("click"); await expect(lineSlicer.getByRole("button", { name: "Line A", exact: true })).toHaveClass(/active/); await expect(planCard.locator("strong")).not.toHaveText(planBefore ?? ""); await expect(actualCard.locator("small")).toContainText("highlighted of"); await expect(gapCard.locator("strong")).toHaveText(gapBefore ?? ""); await lineSlicer.getByRole("button", { name: "Line A", exact: true }).dispatchEvent("click");
-  const hierarchyVisual = page.locator("article.visual-card", { has: page.getByText("Actual by Line", { exact: true }) }).first();
-  await expect(hierarchyVisual).toContainText("Line level"); await hierarchyVisual.getByRole("button", { name: "Expand Actual by Line to next level" }).dispatchEvent("click");
-  await expect(hierarchyVisual).toContainText("Model level"); await hierarchyVisual.getByRole("button", { name: "Drill up Actual by Line" }).dispatchEvent("click"); await expect(hierarchyVisual).toContainText("Line level");
-  await hierarchyVisual.getByRole("button", { name: "Drill through from Actual by Line" }).dispatchEvent("click");
-  const drillthroughDialog = page.getByRole("dialog", { name: /Actual by Line — drill through/ }); await expect(drillthroughDialog).toBeVisible(); await drillthroughDialog.getByLabel("Drillthrough value").selectOption("Line A"); await drillthroughDialog.getByRole("button", { name: "Open detail" }).click();
-  await expect(page.getByText("Line detail", { exact: true })).toBeVisible(); await page.getByRole("button", { name: "Filters", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("Report filters").getByText("Drillthrough: Line = Line A")).toBeVisible(); await page.getByLabel("Report filters").getByLabel("Close filters").dispatchEvent("click"); await page.getByRole("button", { name: "Back", exact: true }).click(); await expect(page.locator(".report-tabs").getByRole("button", { name: "Overview", exact: true })).toHaveClass(/active/);
-  const bookmarkNavigator = page.getByRole("navigation", { name: "Saved views" }); await bookmarkNavigator.getByRole("button", { name: "Apply report bookmark Line A focus" }).dispatchEvent("click"); await expect(page.locator(".filter-summary")).toContainText("Line A");
-  await page.getByRole("navigation", { name: "Page navigator" }).getByRole("button", { name: "Open Detail page" }).dispatchEvent("click"); await expect(page.locator(".report-tabs").getByRole("button", { name: "Detail", exact: true })).toHaveClass(/active/); await page.getByRole("button", { name: "Back to overview" }).dispatchEvent("click"); await expect(page.locator(".report-tabs").getByRole("button", { name: "Overview", exact: true })).toHaveClass(/active/);
-  await page.getByRole("navigation", { name: "Saved views" }).getByRole("button", { name: "Apply report bookmark Overview" }).dispatchEvent("click"); await expect(page.locator(".filter-summary i")).toHaveCount(0);
-  const kpiPositions = await page.locator(".report-grid-item").evaluateAll((items) => items.slice(0, 4).map((item) => ({ x: Math.round(item.getBoundingClientRect().x), y: Math.round(item.getBoundingClientRect().y) })));
-  expect(kpiPositions[1]?.x).toBeGreaterThan(kpiPositions[0]?.x ?? 0); expect(kpiPositions[3]?.y).toBeGreaterThan(kpiPositions[0]?.y ?? 0);
-  await page.getByTitle("Toggle theme").dispatchEvent("click"); await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  const refreshButton = page.getByTitle("Refresh now"); await refreshButton.dispatchEvent("click");
-  await expect(refreshButton).toBeDisabled(); await expect(refreshButton).toBeEnabled({ timeout: 20_000 }); await expect(page.getByText(/Refresh in/)).toBeVisible();
-  const filterLatency = await page.getByRole("button", { name: "Filters", exact: true }).evaluate(async (button) => { const started = performance.now(); (button as HTMLButtonElement).click(); await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); return performance.now() - started; });
+  await page.goto("/login");
+  await expect(
+    page.getByRole("heading", { name: "Sign in to continue" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Administrator/ }).click();
+  await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 });
+  await page.getByRole("link", { name: /Digital Verse Demo/ }).click();
+  await expect(page).toHaveURL(/\/app\/digital-verse-demo\/report\//, {
+    timeout: 20_000,
+  });
+  await expect(page.getByText("Daily Report")).toBeVisible();
+  await expect(page.getByText("Actual by Line")).toBeVisible();
+  await expect(
+    page.locator('[data-visual-title="Achievement"] article'),
+  ).toHaveAttribute("data-conditional-data-color", "#18a66a");
+  await expect(
+    page.locator('[data-visual-title="Actual by Line"] article'),
+  ).toHaveAttribute("data-conditional-rule-count", "3");
+  await expect(
+    page.locator('[data-visual-title="Output Trend"] article'),
+  ).toHaveAttribute("data-small-multiple-count", "2");
+  const productionDetail = page.locator(
+    '[data-visual-title="Production Detail"]',
+  );
+  await expect(
+    productionDetail.locator("td[data-conditional-background]").first(),
+  ).toBeVisible();
+  await expect(
+    productionDetail.locator("td[data-conditional-bar]").first(),
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-visual-title="Actual"] article'),
+  ).toHaveAttribute("data-kpi-target", /\d+/);
+  await expect(
+    page.locator('[data-visual-title="Actual"] article'),
+  ).toContainText("Target");
+  await expect(productionDetail.locator(".data-table-wrap")).toHaveAttribute(
+    "data-column-count",
+    "8",
+  );
+  await expect(
+    productionDetail.getByRole("columnheader", { name: "Production date" }),
+  ).toBeVisible();
+  await expect(
+    productionDetail.getByRole("columnheader", { name: "Variance" }),
+  ).toBeVisible();
+  await expect(page.locator('[data-object-type="textBox"]')).toContainText(
+    "DC line performance",
+  );
+  await expect(
+    page.getByRole("img", { name: "Blue decorative ellipse" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "Digital Verse DV mark" }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 500, height: 900 });
+  await expect(
+    page.getByRole("img", { name: "Blue decorative ellipse" }),
+  ).toBeHidden();
+  await expect(
+    page.getByRole("img", { name: "Digital Verse DV mark" }),
+  ).toBeVisible();
+  const mobilePlan = await page
+    .locator('[data-visual-title="Plan"]')
+    .boundingBox();
+  const mobileActual = await page
+    .locator('[data-visual-title="Actual"]')
+    .boundingBox();
+  expect(mobileActual?.x).toBeGreaterThan(mobilePlan?.x ?? 0);
+  await page.setViewportSize({ width: 950, height: 1050 });
+  const planCard = page.locator('[data-visual-title="Plan"]');
+  const actualCard = page.locator('[data-visual-title="Actual"]');
+  const gapCard = page.locator('[data-visual-title="Gap"]');
+  const planBefore = await planCard.locator("strong").textContent();
+  const gapBefore = await gapCard.locator("strong").textContent();
+  const lineSlicer = page.locator("article.visual-card", {
+    has: page.getByText("Line slicer", { exact: true }),
+  });
+  await lineSlicer
+    .getByRole("button", { name: "Line A", exact: true })
+    .dispatchEvent("click");
+  await expect(
+    lineSlicer.getByRole("button", { name: "Line A", exact: true }),
+  ).toHaveClass(/active/);
+  await expect(planCard.locator("strong")).not.toHaveText(planBefore ?? "");
+  await expect(actualCard.locator("small")).toContainText("highlighted of");
+  await expect(gapCard.locator("strong")).toHaveText(gapBefore ?? "");
+  await lineSlicer
+    .getByRole("button", { name: "Line A", exact: true })
+    .dispatchEvent("click");
+  const hierarchyVisual = page
+    .locator("article.visual-card", {
+      has: page.getByText("Actual by Line", { exact: true }),
+    })
+    .first();
+  await expect(hierarchyVisual).toContainText("Line level");
+  await hierarchyVisual
+    .getByRole("button", { name: "Expand Actual by Line to next level" })
+    .dispatchEvent("click");
+  await expect(hierarchyVisual).toContainText("Model level");
+  await hierarchyVisual
+    .getByRole("button", { name: "Drill up Actual by Line" })
+    .dispatchEvent("click");
+  await expect(hierarchyVisual).toContainText("Line level");
+  await hierarchyVisual
+    .getByRole("button", { name: "Drill through from Actual by Line" })
+    .dispatchEvent("click");
+  const drillthroughDialog = page.getByRole("dialog", {
+    name: /Actual by Line — drill through/,
+  });
+  await expect(drillthroughDialog).toBeVisible();
+  await drillthroughDialog
+    .getByLabel("Drillthrough value")
+    .selectOption("Line A");
+  await drillthroughDialog.getByRole("button", { name: "Open detail" }).click();
+  await expect(page.getByText("Line detail", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Filters", exact: true })
+    .dispatchEvent("click");
+  await expect(
+    page.getByLabel("Report filters").getByText("Drillthrough: Line = Line A"),
+  ).toBeVisible();
+  await page
+    .getByLabel("Report filters")
+    .getByLabel("Close filters")
+    .dispatchEvent("click");
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(
+    page
+      .locator(".report-tabs")
+      .getByRole("button", { name: "Overview", exact: true }),
+  ).toHaveClass(/active/);
+  const bookmarkNavigator = page.getByRole("navigation", {
+    name: "Saved views",
+  });
+  await bookmarkNavigator
+    .getByRole("button", { name: "Apply report bookmark Line A focus" })
+    .dispatchEvent("click");
+  await expect(page.locator(".filter-summary")).toContainText("Line A");
+  await page
+    .getByRole("navigation", { name: "Page navigator" })
+    .getByRole("button", { name: "Open Detail page" })
+    .dispatchEvent("click");
+  await expect(
+    page
+      .locator(".report-tabs")
+      .getByRole("button", { name: "Detail", exact: true }),
+  ).toHaveClass(/active/);
+  await page
+    .getByRole("button", { name: "Back to overview" })
+    .dispatchEvent("click");
+  await expect(
+    page
+      .locator(".report-tabs")
+      .getByRole("button", { name: "Overview", exact: true }),
+  ).toHaveClass(/active/);
+  await page
+    .getByRole("navigation", { name: "Saved views" })
+    .getByRole("button", { name: "Apply report bookmark Overview" })
+    .dispatchEvent("click");
+  await expect(page.locator(".filter-summary i")).toHaveCount(0);
+  const kpiPositions = await page
+    .locator(".report-grid-item")
+    .evaluateAll((items) =>
+      items
+        .slice(0, 4)
+        .map((item) => ({
+          x: Math.round(item.getBoundingClientRect().x),
+          y: Math.round(item.getBoundingClientRect().y),
+        })),
+    );
+  expect(kpiPositions[1]?.x).toBeGreaterThan(kpiPositions[0]?.x ?? 0);
+  expect(kpiPositions[3]?.y).toBeGreaterThan(kpiPositions[0]?.y ?? 0);
+  await page.getByTitle("Toggle theme").dispatchEvent("click");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const refreshButton = page.getByTitle("Refresh now");
+  await refreshButton.dispatchEvent("click");
+  await expect(refreshButton).toBeDisabled();
+  await expect(refreshButton).toBeEnabled({ timeout: 20_000 });
+  await expect(page.getByText(/Refresh in/)).toBeVisible();
+  const filterLatency = await page
+    .getByRole("button", { name: "Filters", exact: true })
+    .evaluate(async (button) => {
+      const started = performance.now();
+      (button as HTMLButtonElement).click();
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      return performance.now() - started;
+    });
   expect(filterLatency).toBeLessThan(1_000);
   const filtersPane = page.getByLabel("Report filters");
   await expect(filtersPane).toBeVisible();
-  const lockedReportFilter = filtersPane.locator('[data-filter-id="filter-1-recent-report"]'); await expect(lockedReportFilter).toContainText("Locked"); await expect(lockedReportFilter).toContainText("Last 30 days");
-  await expect(filtersPane.locator('[data-filter-id="filter-1-business-unit"]')).toHaveCount(0);
-  const topModelFilter = filtersPane.locator('[data-filter-id="filter-1-top-model-context"]'); await expect(topModelFilter.getByLabel("Top N count for Model")).toHaveValue("2");
-  const rowsInContext = page.locator(".source-strip span", { hasText: "Rows in context" }).locator("strong"); const rowsBeforeTopN = await rowsInContext.textContent(); const setTopN = async (value: string) => topModelFilter.getByLabel("Top N count for Model").evaluate((element, nextValue) => { const input = element as HTMLInputElement; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(input, nextValue); input.dispatchEvent(new Event("input", { bubbles: true })); }, value); await setTopN("1"); await expect(rowsInContext).not.toHaveText(rowsBeforeTopN ?? ""); await setTopN("2"); await expect(topModelFilter.getByLabel("Top N count for Model")).toHaveValue("2");
+  const lockedReportFilter = filtersPane.locator(
+    '[data-filter-id="filter-1-recent-report"]',
+  );
+  await expect(lockedReportFilter).toContainText("Locked");
+  await expect(lockedReportFilter).toContainText("Last 30 days");
+  await expect(
+    filtersPane.locator('[data-filter-id="filter-1-business-unit"]'),
+  ).toHaveCount(0);
+  const topModelFilter = filtersPane.locator(
+    '[data-filter-id="filter-1-top-model-context"]',
+  );
+  await expect(topModelFilter.getByLabel("Top N count for Model")).toHaveValue(
+    "2",
+  );
+  const rowsInContext = page
+    .locator(".source-strip span", { hasText: "Rows in context" })
+    .locator("strong");
+  const rowsBeforeTopN = await rowsInContext.textContent();
+  const setTopN = async (value: string) =>
+    topModelFilter
+      .getByLabel("Top N count for Model")
+      .evaluate((element, nextValue) => {
+        const input = element as HTMLInputElement;
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          "value",
+        )?.set;
+        setter?.call(input, nextValue);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }, value);
+  await setTopN("1");
+  await expect(rowsInContext).not.toHaveText(rowsBeforeTopN ?? "");
+  await setTopN("2");
+  await expect(topModelFilter.getByLabel("Top N count for Model")).toHaveValue(
+    "2",
+  );
   await filtersPane.getByLabel("Line").selectOption("Line A");
   await expect(page.getByText("Line A", { exact: true }).first()).toBeVisible();
-  await page.getByRole("button", { name: "Bookmarks", exact: true }).dispatchEvent("click");
+  await page
+    .getByRole("button", { name: "Bookmarks", exact: true })
+    .dispatchEvent("click");
   const bookmarksPane = page.getByLabel("Personal bookmarks");
-  await expect(bookmarksPane.getByText("Report bookmarks")).toBeVisible(); await expect(bookmarksPane.getByText("Line A focus")).toBeVisible();
-  await bookmarksPane.getByLabel("Bookmark name").evaluate((element) => { const input = element as HTMLInputElement; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(input, "Line A view"); input.dispatchEvent(new Event("input", { bubbles: true })); }); await bookmarksPane.getByRole("button", { name: "Add" }).dispatchEvent("click");
-  await expect(bookmarksPane.getByText("Line A view")).toBeVisible(); await bookmarksPane.getByLabel("Close bookmarks").dispatchEvent("click");
-  await page.getByRole("button", { name: "Show data for Actual by Line" }).dispatchEvent("click");
-  await expect(page.getByRole("dialog", { name: /Actual by Line — underlying data/ })).toBeVisible(); await page.getByRole("button", { name: "Close dialog" }).dispatchEvent("click");
-  await page.getByRole("button", { name: "Focus Actual by Line" }).dispatchEvent("click");
-  await expect(page.getByRole("dialog", { name: /Actual by Line — focus mode/ })).toBeVisible(); await page.getByRole("button", { name: "Close dialog" }).dispatchEvent("click");
-  await page.getByRole("button", { name: "Filters", exact: true }).dispatchEvent("click");
-  await filtersPane.getByLabel("Date from").evaluate((element) => { const input = element as HTMLInputElement; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(input, "2099-01-01"); input.dispatchEvent(new Event("input", { bubbles: true })); });
-  await expect(page.getByRole("heading", { name: "No matching data" })).toBeVisible(); await page.getByRole("button", { name: "Reset filters" }).dispatchEvent("click");
-  await expect(page.getByText("Actual by Line").first()).toBeVisible(); await filtersPane.getByLabel("Close filters").dispatchEvent("click");
-  const reportViewport = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
-  expect(reportViewport.scrollWidth).toBeLessThanOrEqual(reportViewport.clientWidth + 1);
+  await expect(bookmarksPane.getByText("Report bookmarks")).toBeVisible();
+  await expect(bookmarksPane.getByText("Line A focus")).toBeVisible();
+  await bookmarksPane.getByLabel("Bookmark name").evaluate((element) => {
+    const input = element as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setter?.call(input, "Line A view");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await bookmarksPane
+    .getByRole("button", { name: "Add" })
+    .dispatchEvent("click");
+  await expect(bookmarksPane.getByText("Line A view")).toBeVisible();
+  await bookmarksPane.getByLabel("Close bookmarks").dispatchEvent("click");
+  await page
+    .getByRole("button", { name: "Show data for Actual by Line" })
+    .dispatchEvent("click");
+  await expect(
+    page.getByRole("dialog", { name: /Actual by Line — underlying data/ }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Close dialog" })
+    .dispatchEvent("click");
+  await page
+    .getByRole("button", { name: "Focus Actual by Line" })
+    .dispatchEvent("click");
+  await expect(
+    page.getByRole("dialog", { name: /Actual by Line — focus mode/ }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Close dialog" })
+    .dispatchEvent("click");
+  await page
+    .getByRole("button", { name: "Filters", exact: true })
+    .dispatchEvent("click");
+  await filtersPane.getByLabel("Date from").evaluate((element) => {
+    const input = element as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setter?.call(input, "2099-01-01");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await expect(
+    page.getByRole("heading", { name: "No matching data" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Reset filters" })
+    .dispatchEvent("click");
+  await expect(page.getByText("Actual by Line").first()).toBeVisible();
+  await filtersPane.getByLabel("Close filters").dispatchEvent("click");
+  const reportViewport = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(reportViewport.scrollWidth).toBeLessThanOrEqual(
+    reportViewport.clientWidth + 1,
+  );
   await page.goto("/admin/alerts");
-  await expect(page.getByRole("heading", { name: "Structured alert rules" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Achievement below target" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Structured alert rules" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "Achievement below target" }),
+  ).toBeVisible();
   await page.goto("/app/digital-verse-demo/report/dl-report-dc-line");
   await expect(page.getByText("Actual by Line")).toBeVisible();
-  await page.goto("/admin/reports/report-1/edit"); await expect(page.getByText("Canvas", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Edit page Line detail" }).dispatchEvent("click"); await expect(page.getByLabel("Use page as drillthrough target")).toBeChecked(); await expect(page.getByLabel("Drillthrough field Line")).toBeChecked();
-  await page.getByRole("button", { name: "Edit page Overview" }).dispatchEvent("click"); await page.getByRole("button", { name: "Move Line slicer" }).dispatchEvent("click"); await page.getByRole("button", { name: "Format" }).dispatchEvent("click"); await expect(page.getByRole("button", { name: "Filter Line slicer to Plan", exact: true })).toHaveAttribute("aria-pressed", "true"); await expect(page.getByRole("button", { name: "Highlight Line slicer to Actual", exact: true })).toHaveAttribute("aria-pressed", "true"); await expect(page.getByRole("button", { name: "No interaction from Line slicer to Gap", exact: true })).toHaveAttribute("aria-pressed", "true"); await page.getByRole("button", { name: "Highlight Line slicer to Plan", exact: true }).click(); await expect(page.getByRole("button", { name: "Highlight Line slicer to Plan", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Move Open detail" }).dispatchEvent("click"); await page.getByRole("button", { name: "Build" }).dispatchEvent("click"); await expect(page.getByLabel("Control type")).toHaveValue("button"); await expect(page.getByLabel("Button action")).toHaveValue("page"); await expect(page.getByLabel("Button target page")).toHaveValue("page-1-detail");
-  await page.getByRole("button", { name: "Add Bookmark navigator" }).click(); await expect(page.getByLabel("Control type")).toHaveValue("bookmarkNavigator"); await page.getByLabel("Control title").fill("Quick views"); await page.getByRole("button", { name: "Line A focus", exact: true }).click(); await expect(page.getByLabel("Report bookmark name")).toHaveValue("Line A focus"); await expect(page.getByLabel("Report bookmark Line", { exact: true })).toHaveValue("Line A");
-  await page.getByRole("button", { name: "Move Output Trend" }).dispatchEvent("click"); await page.getByRole("button", { name: "Build" }).dispatchEvent("click"); await expect(page.getByLabel("Legend field")).toHaveValue("Model"); await expect(page.getByLabel("Small multiple field")).toHaveValue("Shift"); await expect(page.getByLabel("Tooltip field 1")).toHaveValue("PlanQty"); await expect(page.getByLabel("Tooltip field 2")).toHaveValue("PendingQty");
-  await page.getByRole("button", { name: "Move Actual by Line" }).dispatchEvent("click"); await page.getByRole("button", { name: "Build" }).dispatchEvent("click");
-  await expect(page.getByLabel("Drill level 2")).toHaveValue("Model"); await expect(page.getByLabel("Drill level 3")).toHaveValue("Shift"); await expect(page.getByLabel("Value field 1")).toHaveValue("ActualQty"); await expect(page.getByLabel("Value field 2")).toHaveValue("PlanQty"); await page.getByRole("button", { name: "Move value PlanQty up" }).dispatchEvent("click"); await expect(page.getByLabel("Value field 1")).toHaveValue("PlanQty"); await expect(page.getByLabel("Value field 2")).toHaveValue("ActualQty"); await expect(page.getByLabel("Sort visual by")).toHaveValue("ActualQty"); await expect(page.getByLabel("Sort visual direction")).toHaveValue("desc");
-  await page.getByRole("button", { name: "Format" }).dispatchEvent("click"); const highOutputRule = page.locator('[data-rule-id="cf-1-line-high"]'); await expect(highOutputRule.getByLabel("Conditional field 1")).toHaveValue("ActualQty"); await expect(highOutputRule.getByLabel("Conditional target 1")).toHaveValue("dataColor"); await expect(highOutputRule.getByLabel("Conditional color 1")).toHaveValue("#18a66a"); await highOutputRule.getByLabel("Conditional value 1").evaluate((element) => { const input = element as HTMLInputElement; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(input, "10500"); input.dispatchEvent(new Event("input", { bubbles: true })); });
-  await page.getByRole("button", { name: "Filters", exact: true }).dispatchEvent("click");
-  const builderTopN = page.locator('[data-filter-id="filter-1-top-model-context"]'); await expect(builderTopN.getByLabel("Filter type")).toHaveValue("topN"); await expect(builderTopN.getByLabel("Top N count")).toHaveValue("2"); await builderTopN.getByLabel("Top N count").evaluate((element) => { const input = element as HTMLInputElement; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(input, "1"); input.dispatchEvent(new Event("input", { bubbles: true })); });
-  const builderRelative = page.locator('[data-filter-id="filter-1-recent-report"]'); await expect(builderRelative.getByLabel("Filter type")).toHaveValue("relativeDate"); await expect(builderRelative.getByLabel("Lock filter")).toBeChecked();
-  const builderHidden = page.locator('[data-filter-id="filter-1-business-unit"]'); await expect(builderHidden.getByLabel("Filter type")).toHaveValue("advanced"); await expect(builderHidden.getByLabel("Hide filter")).toBeChecked();
-  await page.getByRole("button", { name: "Move Actual", exact: true }).dispatchEvent("click"); await page.getByRole("button", { name: "Build", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("KPI target source")).toHaveValue("measure"); await expect(page.getByLabel("KPI target measure")).toHaveValue("PlanQty"); await page.getByLabel("KPI variance display").selectOption("value");
-  await page.getByRole("button", { name: "Move Production Detail", exact: true }).dispatchEvent("click"); await page.getByRole("button", { name: "Build", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("Tabular column 1")).toHaveValue("RecordDate"); await expect(page.getByLabel("Tabular header 1")).toHaveValue("Production date"); await page.getByLabel("Tabular header 1").fill("Work date"); await page.getByLabel("Table row limit").fill("25"); await page.getByLabel("Use striped tabular rows").uncheck();
-  await page.getByRole("button", { name: "Move Operations note", exact: true }).dispatchEvent("click"); await page.getByRole("button", { name: "Build", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("Control type")).toHaveValue("textBox"); await page.getByLabel("Text box content").fill("Shift handover: review actual versus plan before the next refresh."); await page.getByRole("button", { name: "Format", exact: true }).dispatchEvent("click"); await page.getByLabel("Text box font size").fill("16"); await page.getByRole("button", { name: "Move Operations marker", exact: true }).dispatchEvent("click"); await page.getByRole("button", { name: "Build", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("Shape type")).toHaveValue("ellipse"); await page.getByRole("button", { name: "Move Digital Verse mark", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("Control type")).toHaveValue("image"); await expect(page.getByLabel("Image source URL")).toHaveValue(/data:image\/svg\+xml/);
-  await page.getByRole("button", { name: "Add Gauge" }).click({ timeout: 10_000 }); await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
-  await expect(page.getByText("Format visual")).toBeVisible(); await expect(page.getByText("Show title")).toBeVisible();
-  await expect(page.getByLabel("Report theme name")).toHaveValue("Digital Verse"); await page.getByLabel("Report accent color").evaluate((element) => { const input = element as HTMLInputElement; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(input, "#7c3aed"); input.dispatchEvent(new Event("input", { bubbles: true })); }); await page.getByLabel("Page grid interval").selectOption("2"); await page.getByLabel("New format preset name").fill("QA preset"); await page.getByRole("button", { name: "Save preset" }).click(); await expect(page.getByRole("button", { name: "Apply preset QA preset" })).toBeVisible();
-  await page.getByRole("button", { name: "Copy selected item" }).click(); await page.getByRole("button", { name: "Paste copied item" }).click(); await expect(page.getByRole("button", { name: "Move Gauge copy", exact: true })).toBeVisible(); await page.getByRole("button", { name: "Undo" }).click(); await expect(page.getByRole("button", { name: "Move Gauge copy", exact: true })).toHaveCount(0); await page.getByRole("button", { name: "Redo" }).click(); await expect(page.getByRole("button", { name: "Move Gauge copy", exact: true })).toBeVisible(); await page.getByRole("button", { name: "Selection" }).click(); await page.getByRole("button", { name: "Hide Gauge copy", exact: true }).click(); await expect(page.getByRole("button", { name: "Move Gauge copy", exact: true })).toHaveCount(0); await page.getByRole("button", { name: "Undo" }).click(); await expect(page.getByRole("button", { name: "Move Gauge copy", exact: true })).toBeVisible();
-  const builderViewport = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
-  expect(builderViewport.scrollWidth).toBeLessThanOrEqual(builderViewport.clientWidth + 1);
-  const savedReport = page.waitForResponse((response) => response.url().includes("/api/reports/report-1") && response.request().method() === "PUT", { timeout: 20_000 }); await page.getByRole("button", { name: "Save draft" }).dispatchEvent("click"); expect((await savedReport).ok()).toBe(true); await expect(page.getByText("Report saved.")).toBeVisible({ timeout: 20_000 }); await page.reload(); await expect(page.getByRole("button", { name: "Move Quick views" })).toBeVisible(); await page.getByRole("button", { name: "Format" }).dispatchEvent("click"); await expect(page.getByLabel("Report accent color")).toHaveValue("#7c3aed"); await expect(page.getByLabel("Page grid interval")).toHaveValue("2"); await page.getByRole("button", { name: "Move Line slicer" }).dispatchEvent("click"); await page.getByRole("button", { name: "Format" }).dispatchEvent("click"); await expect(page.getByRole("button", { name: "Apply preset QA preset" })).toBeVisible(); await expect(page.getByRole("button", { name: "Highlight Line slicer to Plan", exact: true })).toHaveAttribute("aria-pressed", "true"); await page.getByRole("button", { name: "Filters", exact: true }).dispatchEvent("click"); await expect(page.locator('[data-filter-id="filter-1-top-model-context"]').getByLabel("Top N count")).toHaveValue("1"); await page.getByRole("button", { name: "Move Actual by Line" }).dispatchEvent("click"); await page.getByRole("button", { name: "Format" }).dispatchEvent("click"); await expect(page.locator('[data-rule-id="cf-1-line-high"]').getByLabel("Conditional value 1")).toHaveValue("10500"); await page.getByRole("button", { name: "Build" }).dispatchEvent("click"); await expect(page.getByLabel("Value field 1")).toHaveValue("PlanQty"); await expect(page.getByLabel("Value field 2")).toHaveValue("ActualQty");
-  await page.getByRole("button", { name: "Move Actual", exact: true }).dispatchEvent("click"); await page.getByRole("button", { name: "Build", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("KPI variance display")).toHaveValue("value"); await page.getByRole("button", { name: "Move Production Detail", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("Tabular header 1")).toHaveValue("Work date"); await expect(page.getByLabel("Table row limit")).toHaveValue("25"); await expect(page.getByLabel("Use striped tabular rows")).not.toBeChecked(); await page.getByRole("button", { name: "Move Operations note", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("Text box content")).toHaveValue("Shift handover: review actual versus plan before the next refresh."); await page.getByRole("button", { name: "Format", exact: true }).dispatchEvent("click"); await expect(page.getByLabel("Text box font size")).toHaveValue("16");
+  await page.goto("/admin/reports/report-1/edit");
+  await expect(page.getByText("Desktop canvas", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Edit page Line detail" })
+    .dispatchEvent("click");
+  await expect(
+    page.getByLabel("Use page as drillthrough target"),
+  ).toBeChecked();
+  await expect(page.getByLabel("Drillthrough field Line")).toBeChecked();
+  await page
+    .getByRole("button", { name: "Edit page Overview" })
+    .dispatchEvent("click");
+  await page
+    .getByRole("button", { name: "Move Line slicer" })
+    .dispatchEvent("click");
+  await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
+  await expect(
+    page.getByRole("button", {
+      name: "Filter Line slicer to Plan",
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("button", {
+      name: "Highlight Line slicer to Actual",
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("button", {
+      name: "No interaction from Line slicer to Gap",
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page
+    .getByRole("button", { name: "Highlight Line slicer to Plan", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "Highlight Line slicer to Plan",
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page
+    .getByRole("button", { name: "Move Open detail" })
+    .dispatchEvent("click");
+  await page.getByRole("button", { name: "Build" }).dispatchEvent("click");
+  await expect(page.getByLabel("Control type")).toHaveValue("button");
+  await expect(page.getByLabel("Button action")).toHaveValue("page");
+  await expect(page.getByLabel("Button target page")).toHaveValue(
+    "page-1-detail",
+  );
+  await page.getByRole("button", { name: "Add Bookmark navigator" }).click();
+  await expect(page.getByLabel("Control type")).toHaveValue(
+    "bookmarkNavigator",
+  );
+  await page.getByLabel("Control title").fill("Quick views");
+  await page.getByRole("button", { name: "Line A focus", exact: true }).click();
+  await expect(page.getByLabel("Report bookmark name")).toHaveValue(
+    "Line A focus",
+  );
+  await expect(
+    page.getByLabel("Report bookmark Line", { exact: true }),
+  ).toHaveValue("Line A");
+  await page
+    .getByRole("button", { name: "Move Output Trend" })
+    .dispatchEvent("click");
+  await page.getByRole("button", { name: "Build" }).dispatchEvent("click");
+  await expect(page.getByLabel("Legend field")).toHaveValue("Model");
+  await expect(page.getByLabel("Small multiple field")).toHaveValue("Shift");
+  await expect(page.getByLabel("Tooltip field 1")).toHaveValue("PlanQty");
+  await expect(page.getByLabel("Tooltip field 2")).toHaveValue("PendingQty");
+  await page
+    .getByRole("button", { name: "Move Actual by Line" })
+    .dispatchEvent("click");
+  await page.getByRole("button", { name: "Build" }).dispatchEvent("click");
+  await expect(page.getByLabel("Drill level 2")).toHaveValue("Model");
+  await expect(page.getByLabel("Drill level 3")).toHaveValue("Shift");
+  await expect(page.getByLabel("Value field 1")).toHaveValue("ActualQty");
+  await expect(page.getByLabel("Value field 2")).toHaveValue("PlanQty");
+  await page
+    .getByRole("button", { name: "Move value PlanQty up" })
+    .dispatchEvent("click");
+  await expect(page.getByLabel("Value field 1")).toHaveValue("PlanQty");
+  await expect(page.getByLabel("Value field 2")).toHaveValue("ActualQty");
+  await expect(page.getByLabel("Sort visual by")).toHaveValue("ActualQty");
+  await expect(page.getByLabel("Sort visual direction")).toHaveValue("desc");
+  await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
+  const highOutputRule = page.locator('[data-rule-id="cf-1-line-high"]');
+  await expect(highOutputRule.getByLabel("Conditional field 1")).toHaveValue(
+    "ActualQty",
+  );
+  await expect(highOutputRule.getByLabel("Conditional target 1")).toHaveValue(
+    "dataColor",
+  );
+  await expect(highOutputRule.getByLabel("Conditional color 1")).toHaveValue(
+    "#18a66a",
+  );
+  await highOutputRule.getByLabel("Conditional value 1").evaluate((element) => {
+    const input = element as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setter?.call(input, "10500");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await page
+    .getByRole("button", { name: "Filters", exact: true })
+    .dispatchEvent("click");
+  const builderTopN = page.locator(
+    '[data-filter-id="filter-1-top-model-context"]',
+  );
+  await expect(builderTopN.getByLabel("Filter type")).toHaveValue("topN");
+  await expect(builderTopN.getByLabel("Top N count")).toHaveValue("2");
+  await builderTopN.getByLabel("Top N count").evaluate((element) => {
+    const input = element as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setter?.call(input, "1");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const builderRelative = page.locator(
+    '[data-filter-id="filter-1-recent-report"]',
+  );
+  await expect(builderRelative.getByLabel("Filter type")).toHaveValue(
+    "relativeDate",
+  );
+  await expect(builderRelative.getByLabel("Lock filter")).toBeChecked();
+  const builderHidden = page.locator(
+    '[data-filter-id="filter-1-business-unit"]',
+  );
+  await expect(builderHidden.getByLabel("Filter type")).toHaveValue("advanced");
+  await expect(builderHidden.getByLabel("Hide filter")).toBeChecked();
+  await page
+    .getByRole("button", { name: "Move Actual", exact: true })
+    .dispatchEvent("click");
+  await page
+    .getByRole("button", { name: "Build", exact: true })
+    .dispatchEvent("click");
+  await expect(page.getByLabel("KPI target source")).toHaveValue("measure");
+  await expect(page.getByLabel("KPI target measure")).toHaveValue("PlanQty");
+  await page.getByLabel("KPI variance display").selectOption("value");
+  await page
+    .getByRole("button", { name: "Move Production Detail", exact: true })
+    .dispatchEvent("click");
+  await page
+    .getByRole("button", { name: "Build", exact: true })
+    .dispatchEvent("click");
+  await expect(page.getByLabel("Tabular column 1")).toHaveValue("RecordDate");
+  await expect(page.getByLabel("Tabular header 1")).toHaveValue(
+    "Production date",
+  );
+  await page.getByLabel("Tabular header 1").fill("Work date");
+  await page.getByLabel("Table row limit").fill("25");
+  await page.getByLabel("Use striped tabular rows").uncheck();
+  await page
+    .getByRole("button", { name: "Move Operations note", exact: true })
+    .dispatchEvent("click");
+  await page
+    .getByRole("button", { name: "Build", exact: true })
+    .dispatchEvent("click");
+  await expect(page.getByLabel("Control type")).toHaveValue("textBox");
+  await page
+    .getByLabel("Text box content")
+    .fill("Shift handover: review actual versus plan before the next refresh.");
+  await page
+    .getByRole("button", { name: "Format", exact: true })
+    .dispatchEvent("click");
+  await page.getByLabel("Text box font size").fill("16");
+  await page
+    .getByRole("button", { name: "Move Operations marker", exact: true })
+    .dispatchEvent("click");
+  await page
+    .getByRole("button", { name: "Build", exact: true })
+    .dispatchEvent("click");
+  await expect(page.getByLabel("Shape type")).toHaveValue("ellipse");
+  await page
+    .getByRole("button", { name: "Move Digital Verse mark", exact: true })
+    .dispatchEvent("click");
+  await expect(page.getByLabel("Control type")).toHaveValue("image");
+  await expect(page.getByLabel("Image source URL")).toHaveValue(
+    /data:image\/svg\+xml/,
+  );
+  await page.getByRole("button", { name: "Mobile layout", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Mobile layout", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("button", { name: "Move Operations marker", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Selection" }).click();
+  await page
+    .getByRole("button", {
+      name: "Show Operations marker on mobile",
+      exact: true,
+    })
+    .click();
+  const mobileMarker = page.getByRole("button", {
+    name: "Move Operations marker",
+    exact: true,
+  });
+  await expect(mobileMarker).toBeVisible();
+  await mobileMarker.dispatchEvent("click");
+  const markerBefore = await mobileMarker.boundingBox();
+  await page.keyboard.press("ArrowRight");
+  await expect
+    .poll(async () => (await mobileMarker.boundingBox())?.x ?? 0)
+    .toBeGreaterThan(markerBefore?.x ?? 0);
+  await page.keyboard.press("Shift+ArrowDown");
+  await page.getByRole("button", { name: "Inspect", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Accessibility inspector" }),
+  ).toBeVisible();
+  await expect(page.getByText("No blocking issues")).toBeVisible();
+  await expect(page.getByText("Text / surface")).toBeVisible();
+  await page.getByRole("button", { name: "Preview high contrast" }).click();
+  await expect(page.locator(".builder-grid-stage")).toHaveAttribute(
+    "data-high-contrast",
+    "true",
+  );
+  await expect(
+    page.getByRole("button", { name: "Exit high contrast preview" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Exit high contrast preview" })
+    .click();
+  await page.getByRole("button", { name: "Desktop layout", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Add Gauge" })
+    .click({ timeout: 10_000 });
+  await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
+  await expect(page.getByText("Format visual")).toBeVisible();
+  await expect(page.getByText("Show title")).toBeVisible();
+  await expect(page.getByLabel("Report theme name")).toHaveValue(
+    "Digital Verse",
+  );
+  await page.getByLabel("Report accent color").evaluate((element) => {
+    const input = element as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setter?.call(input, "#7c3aed");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await page.getByLabel("Page grid interval").selectOption("2");
+  await page.getByLabel("New format preset name").fill("QA preset");
+  await page.getByRole("button", { name: "Save preset" }).click();
+  await expect(
+    page.getByRole("button", { name: "Apply preset QA preset" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Copy selected item" }).click();
+  await page.getByRole("button", { name: "Paste copied item" }).click();
+  await expect(
+    page.getByRole("button", { name: "Move Gauge copy", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(
+    page.getByRole("button", { name: "Move Gauge copy", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Redo" }).click();
+  await expect(
+    page.getByRole("button", { name: "Move Gauge copy", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Selection" }).click();
+  await page
+    .getByRole("button", { name: "Hide Gauge copy", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Move Gauge copy", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(
+    page.getByRole("button", { name: "Move Gauge copy", exact: true }),
+  ).toBeVisible();
+  const builderViewport = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(builderViewport.scrollWidth).toBeLessThanOrEqual(
+    builderViewport.clientWidth + 1,
+  );
+  const savedReport = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/reports/report-1") &&
+      response.request().method() === "PUT",
+    { timeout: 20_000 },
+  );
+  await page.getByRole("button", { name: "Save draft" }).dispatchEvent("click");
+  expect((await savedReport).ok()).toBe(true);
+  await expect(page.getByText("Report saved.")).toBeVisible({
+    timeout: 20_000,
+  });
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Move Quick views" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
+  await expect(page.getByLabel("Report accent color")).toHaveValue("#7c3aed");
+  await expect(page.getByLabel("Page grid interval")).toHaveValue("2");
+  await page
+    .getByRole("button", { name: "Move Line slicer" })
+    .dispatchEvent("click");
+  await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
+  await expect(
+    page.getByRole("button", { name: "Apply preset QA preset" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: "Highlight Line slicer to Plan",
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page
+    .getByRole("button", { name: "Filters", exact: true })
+    .dispatchEvent("click");
+  await expect(
+    page
+      .locator('[data-filter-id="filter-1-top-model-context"]')
+      .getByLabel("Top N count"),
+  ).toHaveValue("1");
+  await page
+    .getByRole("button", { name: "Move Actual by Line" })
+    .dispatchEvent("click");
+  await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
+  await expect(
+    page
+      .locator('[data-rule-id="cf-1-line-high"]')
+      .getByLabel("Conditional value 1"),
+  ).toHaveValue("10500");
+  await page.getByRole("button", { name: "Build" }).dispatchEvent("click");
+  await expect(page.getByLabel("Value field 1")).toHaveValue("PlanQty");
+  await expect(page.getByLabel("Value field 2")).toHaveValue("ActualQty");
+  await page
+    .getByRole("button", { name: "Move Actual", exact: true })
+    .dispatchEvent("click");
+  await page
+    .getByRole("button", { name: "Build", exact: true })
+    .dispatchEvent("click");
+  await expect(page.getByLabel("KPI variance display")).toHaveValue("value");
+  await page
+    .getByRole("button", { name: "Move Production Detail", exact: true })
+    .dispatchEvent("click");
+  await expect(page.getByLabel("Tabular header 1")).toHaveValue("Work date");
+  await expect(page.getByLabel("Table row limit")).toHaveValue("25");
+  await expect(page.getByLabel("Use striped tabular rows")).not.toBeChecked();
+  await page
+    .getByRole("button", { name: "Move Operations note", exact: true })
+    .dispatchEvent("click");
+  await expect(page.getByLabel("Text box content")).toHaveValue(
+    "Shift handover: review actual versus plan before the next refresh.",
+  );
+  await page
+    .getByRole("button", { name: "Format", exact: true })
+    .dispatchEvent("click");
+  await expect(page.getByLabel("Text box font size")).toHaveValue("16");
+  await page.getByRole("button", { name: "Mobile layout", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Move Operations marker", exact: true }),
+  ).toBeVisible();
   expect(browserErrors).toEqual([]);
 });
 
 test("viewer is blocked from administration", async ({ page }) => {
-  await page.goto("/login"); await page.getByRole("button", { name: /Viewer/ }).click(); await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 }); await page.goto("/admin"); await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 });
+  await page.goto("/login");
+  await page.getByRole("button", { name: /Viewer/ }).click();
+  await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 });
+  await page.goto("/admin");
+  await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 });
 });
