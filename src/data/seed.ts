@@ -123,7 +123,7 @@ const baseVisuals = (variant: number): VisualDefinition[] => [
   { id: `v-${variant}-achievement`, type: "kpi", title: "Achievement", x: 6, y: 0, w: 2, h: 2, measure: "AchievementRate", aggregation: "average", format: "percent" },
   { id: `v-${variant}-yield`, type: "kpi", title: "Yield", x: 8, y: 0, w: 2, h: 2, measure: "YieldRate", aggregation: "average", format: "percent" },
   { id: `v-${variant}-pending`, type: "kpi", title: "Pending", x: 10, y: 0, w: 2, h: 2, measure: "PendingQty", aggregation: "sum", format: "number" },
-  { id: `v-${variant}-bar`, type: "bar", title: "Actual by Line", x: 0, y: 2, w: 6, h: 5, dimension: "Line", measure: "ActualQty", aggregation: "sum" },
+  { id: `v-${variant}-bar`, type: "bar", title: "Actual by Line", x: 0, y: 2, w: 6, h: 5, dimension: "Line", hierarchy: ["Line", "Model", "Shift"], measure: "ActualQty", aggregation: "sum" },
   { id: `v-${variant}-line`, type: variant % 2 === 0 ? "area" : "line", title: "Output Trend", x: 6, y: 2, w: 6, h: 5, dimension: "RecordDate", measure: "ActualQty", aggregation: "sum" },
   { id: `v-${variant}-donut`, type: "doughnut", title: "Output by Model", x: 0, y: 7, w: 4, h: 5, dimension: "Model", measure: "ActualQty", aggregation: "sum" },
   { id: `v-${variant}-matrix`, type: variant % 3 === 0 ? "matrix" : "table", title: variant % 3 === 0 ? "Line / Model Matrix" : "Production Detail", x: 4, y: 7, w: 8, h: 5 },

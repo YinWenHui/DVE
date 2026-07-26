@@ -140,6 +140,7 @@ export interface VisualDefinition {
   w: number;
   h: number;
   dimension?: keyof ManufacturingRecord;
+  hierarchy?: Array<keyof ManufacturingRecord>;
   measure?: keyof ManufacturingRecord;
   secondaryMeasure?: keyof ManufacturingRecord;
   aggregation?: Aggregation;

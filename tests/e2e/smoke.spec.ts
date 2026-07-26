@@ -9,6 +9,11 @@ test("mock administrator opens the seeded application and uses report controls",
   await page.getByRole("button", { name: /Administrator/ }).click(); await expect(page).toHaveURL(/\/apps/, { timeout: 20_000 });
   await page.getByRole("link", { name: /Digital Verse Demo/ }).click(); await expect(page).toHaveURL(/\/app\/digital-verse-demo\/report\//, { timeout: 20_000 });
   await expect(page.getByText("Daily Report")).toBeVisible(); await expect(page.getByText("Actual by Line")).toBeVisible();
+  const hierarchyVisual = page.locator("article.visual-card", { has: page.getByText("Actual by Line", { exact: true }) }).first();
+  await expect(hierarchyVisual).toContainText("Line level"); await hierarchyVisual.getByRole("button", { name: "Expand Actual by Line to next level" }).dispatchEvent("click");
+  await expect(hierarchyVisual).toContainText("Model level"); await hierarchyVisual.getByRole("button", { name: "Drill up Actual by Line" }).dispatchEvent("click"); await expect(hierarchyVisual).toContainText("Line level");
+  const kpiPositions = await page.locator(".report-grid-item").evaluateAll((items) => items.slice(0, 4).map((item) => ({ x: Math.round(item.getBoundingClientRect().x), y: Math.round(item.getBoundingClientRect().y) })));
+  expect(kpiPositions[1]?.x).toBeGreaterThan(kpiPositions[0]?.x ?? 0); expect(kpiPositions[3]?.y).toBeGreaterThan(kpiPositions[0]?.y ?? 0);
   await page.getByTitle("Toggle theme").dispatchEvent("click"); await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   const refreshButton = page.getByTitle("Refresh now"); await refreshButton.dispatchEvent("click");
   await expect(refreshButton).toBeDisabled(); await expect(refreshButton).toBeEnabled({ timeout: 20_000 }); await expect(page.getByText(/Refresh in/)).toBeVisible();
@@ -37,6 +42,8 @@ test("mock administrator opens the seeded application and uses report controls",
   await page.goto("/app/digital-verse-demo/report/dl-report-dc-line");
   await expect(page.getByText("Actual by Line")).toBeVisible();
   await page.goto("/admin/reports/report-1/edit"); await expect(page.getByText("Canvas", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Move Actual by Line" }).dispatchEvent("click"); await page.getByRole("button", { name: "Build" }).dispatchEvent("click");
+  await expect(page.getByLabel("Drill level 2")).toHaveValue("Model"); await expect(page.getByLabel("Drill level 3")).toHaveValue("Shift");
   await page.getByRole("button", { name: "Add Gauge" }).click({ timeout: 10_000 }); await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
   await expect(page.getByText("Format visual")).toBeVisible(); await expect(page.getByText("Show title")).toBeVisible();
   const builderViewport = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));

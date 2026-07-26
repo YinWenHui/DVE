@@ -1,10 +1,10 @@
 "use client";
 
-import { memo, useCallback, useMemo, type CSSProperties, type MouseEvent } from "react";
-import { Maximize2, TableProperties } from "lucide-react";
+import { memo, useCallback, useMemo, useState, type CSSProperties, type MouseEvent } from "react";
+import { ChevronUp, ChevronsDown, GitBranch, Maximize2, TableProperties } from "lucide-react";
 import { EChart } from "./echart";
 import { ProductionMatrix, ProductionTable } from "./data-table";
-import { aggregateRows, applyReportFilters, chartOption } from "@/lib/reporting";
+import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, visualHierarchy, type VisualDrillSelection } from "@/lib/reporting";
 import type { ManufacturingRecord, VisualDefinition } from "@/types";
 
 const numberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -20,32 +20,76 @@ interface ReportVisualProps {
   showActions?: boolean;
 }
 
+interface DrillState {
+  level: number;
+  path: VisualDrillSelection[];
+}
+
 export const ReportVisual = memo(function ReportVisual({ visual, rows, activeFilters = {}, onSelect, onFocus, onShowData, showActions = true }: ReportVisualProps) {
+  const hierarchy = useMemo(() => visualHierarchy(visual), [visual]);
+  const [drill, setDrill] = useState<DrillState>({ level: 0, path: [] });
+  const [drillMode, setDrillMode] = useState(false);
+
+  const level = Math.min(drill.level, Math.max(0, hierarchy.length - 1));
+  const drillField = hierarchy[level] ?? visual.dimension;
+  const supportsDrill = Boolean(drillField && visual.measure && hierarchy.length > 1 && !["gauge", "scatter", "slicer"].includes(visual.type));
+  const canAdvance = supportsDrill && level < hierarchy.length - 1;
   const scopedRows = useMemo(() => applyReportFilters(rows, visual.filters), [rows, visual.filters]);
+  const drilledRows = useMemo(() => applyVisualDrillPath(scopedRows, drill.path), [drill.path, scopedRows]);
+  const renderedVisual = useMemo(() => drillField ? { ...visual, dimension: drillField } : visual, [drillField, visual]);
+  const actionVisual = useMemo<VisualDefinition>(() => ({
+    ...renderedVisual,
+    hierarchy: undefined,
+    filters: [
+      ...(visual.filters ?? []),
+      ...drill.path.map((selection, index) => ({ id: `drill-${visual.id}-${index}`, field: selection.field, operator: "equals" as const, value: selection.value })),
+    ],
+  }), [drill.path, renderedVisual, visual.filters, visual.id]);
+
+  const selectCategory = useCallback((field: keyof ManufacturingRecord | undefined, value: string) => {
+    if (drillMode && canAdvance && field) {
+      setDrill((current) => ({ level: Math.min(current.level + 1, hierarchy.length - 1), path: [...current.path, { field, value }] }));
+      return;
+    }
+    if (visual.interaction?.crossFilter !== false) onSelect?.(field, value);
+  }, [canAdvance, drillMode, hierarchy.length, onSelect, visual.interaction?.crossFilter]);
+
+  const drillUp = useCallback(() => {
+    setDrill((current) => ({ level: Math.max(0, current.level - 1), path: current.path.slice(0, Math.max(0, current.level - 1)) }));
+  }, []);
+  const expandNext = useCallback(() => {
+    setDrill((current) => ({ ...current, level: Math.min(current.level + 1, hierarchy.length - 1) }));
+  }, [hierarchy.length]);
+
   const style = {
     "--visual-accent": visual.display?.accentColor ?? "var(--accent)",
     backgroundColor: visual.display?.backgroundColor,
     borderRadius: visual.display?.borderRadius,
   } as CSSProperties;
-  const actions = showActions && <VisualActions visual={visual} onFocus={onFocus} onShowData={onShowData} />;
+  const actions = showActions && <VisualActions
+    visual={visual}
+    onFocus={onFocus ? () => onFocus(actionVisual) : undefined}
+    onShowData={onShowData ? () => onShowData(actionVisual) : undefined}
+    drill={supportsDrill ? { level, canAdvance, enabled: drillMode, onToggle: () => setDrillMode((current) => !current), onUp: drillUp, onExpand: expandNext } : undefined}
+  />;
 
   if (visual.type === "kpi" && visual.measure) {
-    const value = aggregateRows(scopedRows, visual.measure, visual.aggregation);
+    const value = aggregateRows(drilledRows, visual.measure, visual.aggregation);
     return <article className="visual-card kpi-card" style={style}>
       {actions}
       <span>{visual.display?.showTitle === false ? null : visual.title}</span>
       <strong>{visual.format === "percent" ? `${(value * 100).toFixed(1)}%` : numberFormat.format(value)}</strong>
-      <small>{scopedRows.length ? "Within current filter context" : "No matching records"}</small>
+      <small>{drilledRows.length ? "Within current filter context" : "No matching records"}</small>
     </article>;
   }
 
   if (visual.type === "table" || visual.type === "matrix") return <article className="visual-card" style={style}>
-    <VisualHeader visual={visual} meta={visual.type === "table" ? `${scopedRows.length} rows` : "Grouped detail"} actions={actions} />
-    <div className="visual-body">{visual.type === "table" ? <ProductionTable rows={scopedRows} /> : <ProductionMatrix rows={scopedRows} />}</div>
+    <VisualHeader visual={visual} meta={visual.type === "table" ? `${drilledRows.length} rows` : "Grouped detail"} actions={actions} />
+    <div className="visual-body">{visual.type === "table" ? <ProductionTable rows={drilledRows} /> : <ProductionMatrix rows={drilledRows} />}</div>
   </article>;
 
   if (visual.type === "slicer" && visual.dimension) {
-    const values = [...new Set(scopedRows.map((row) => String(row[visual.dimension as keyof ManufacturingRecord])))].sort();
+    const values = [...new Set(drilledRows.map((row) => String(row[visual.dimension as keyof ManufacturingRecord])))].sort();
     const selected = activeFilters[visual.dimension] ?? "";
     return <article className="visual-card" style={style}>
       <VisualHeader visual={visual} meta="Shared filter" actions={actions} />
@@ -53,8 +97,16 @@ export const ReportVisual = memo(function ReportVisual({ visual, rows, activeFil
     </article>;
   }
 
-  return <ChartVisual visual={visual} rows={scopedRows} onSelect={onSelect} actions={actions} style={style} />;
+  const fieldName = displayFieldName(drillField);
+  const interactionMeta = supportsDrill
+    ? `${fieldName} level · ${drillMode && canAdvance ? "select to drill" : visual.interaction?.crossFilter === false ? "interaction off" : "click to filter"}`
+    : visual.interaction?.crossFilter === false ? "Interaction off" : "Click to filter";
+  return <ChartVisual visual={renderedVisual} rows={drilledRows} onSelect={drillMode && canAdvance || visual.interaction?.crossFilter !== false ? selectCategory : undefined} actions={actions} style={style} meta={interactionMeta} />;
 });
+
+function displayFieldName(field: keyof ManufacturingRecord | undefined) {
+  return field ? String(field).replace(/([a-z])([A-Z])/g, "$1 $2") : "Category";
+}
 
 function VisualHeader({ visual, meta, actions }: { visual: VisualDefinition; meta: string; actions: React.ReactNode }) {
   if (visual.display?.showTitle === false && !actions) return null;
@@ -64,21 +116,27 @@ function VisualHeader({ visual, meta, actions }: { visual: VisualDefinition; met
   </div>;
 }
 
-function VisualActions({ visual, onFocus, onShowData }: { visual: VisualDefinition; onFocus?: (visual: VisualDefinition) => void; onShowData?: (visual: VisualDefinition) => void }) {
+function VisualActions({ visual, onFocus, onShowData, drill }: {
+  visual: VisualDefinition;
+  onFocus?: () => void;
+  onShowData?: () => void;
+  drill?: { level: number; canAdvance: boolean; enabled: boolean; onToggle: () => void; onUp: () => void; onExpand: () => void };
+}) {
   const run = (event: MouseEvent<HTMLButtonElement>, action: (() => void) | undefined) => { event.stopPropagation(); action?.(); };
   return <div className="visual-actions">
-    {onShowData && <button type="button" title="Show data" aria-label={`Show data for ${visual.title}`} onClick={(event) => run(event, () => onShowData(visual))}><TableProperties size={13} /></button>}
-    {onFocus && <button type="button" title="Focus mode" aria-label={`Focus ${visual.title}`} onClick={(event) => run(event, () => onFocus(visual))}><Maximize2 size={13} /></button>}
+    {drill && drill.level > 0 && <button type="button" title="Drill up" aria-label={`Drill up ${visual.title}`} onClick={(event) => run(event, drill.onUp)}><ChevronUp size={13} /></button>}
+    {drill?.canAdvance && <button type="button" className={drill.enabled ? "active" : ""} title={drill.enabled ? "Turn off drill down" : "Turn on drill down"} aria-label={`${drill.enabled ? "Turn off" : "Turn on"} drill down for ${visual.title}`} aria-pressed={drill.enabled} onClick={(event) => run(event, drill.onToggle)}><GitBranch size={13} /></button>}
+    {drill?.canAdvance && <button type="button" title="Expand to the next hierarchy level" aria-label={`Expand ${visual.title} to next level`} onClick={(event) => run(event, drill.onExpand)}><ChevronsDown size={13} /></button>}
+    {onShowData && <button type="button" title="Show data" aria-label={`Show data for ${visual.title}`} onClick={(event) => run(event, onShowData)}><TableProperties size={13} /></button>}
+    {onFocus && <button type="button" title="Focus mode" aria-label={`Focus ${visual.title}`} onClick={(event) => run(event, onFocus)}><Maximize2 size={13} /></button>}
   </div>;
 }
 
-function ChartVisual({ visual, rows, onSelect, actions, style }: { visual: VisualDefinition; rows: ManufacturingRecord[]; onSelect?: ReportVisualProps["onSelect"]; actions: React.ReactNode; style: CSSProperties }) {
+function ChartVisual({ visual, rows, onSelect, actions, style, meta }: { visual: VisualDefinition; rows: ManufacturingRecord[]; onSelect?: ReportVisualProps["onSelect"]; actions: React.ReactNode; style: CSSProperties; meta: string }) {
   const option = useMemo(() => chartOption(visual, rows), [rows, visual]);
-  const select = useCallback((value: string) => {
-    if (visual.interaction?.crossFilter !== false) onSelect?.(visual.dimension, value);
-  }, [onSelect, visual.dimension, visual.interaction?.crossFilter]);
+  const select = useCallback((value: string) => onSelect?.(visual.dimension, value), [onSelect, visual.dimension]);
   return <article className="visual-card interactive" style={style}>
-    <VisualHeader visual={visual} meta={visual.interaction?.crossFilter === false ? "Interaction off" : "Click to filter"} actions={actions} />
-    <div className="visual-body"><EChart option={option} onSelect={visual.interaction?.crossFilter === false ? undefined : select} /></div>
+    <VisualHeader visual={visual} meta={meta} actions={actions} />
+    <div className="visual-body"><EChart option={option} onSelect={onSelect ? select : undefined} /></div>
   </article>;
 }

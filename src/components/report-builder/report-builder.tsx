@@ -59,6 +59,7 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
     const dimension = dimensions[0]?.key as VisualDefinition["dimension"];
     const nextY = page.visuals.reduce((maximum, visual) => Math.max(maximum, visual.y + visual.h), 0);
     const needsSecondary = ["stackedBar", "stackedColumn", "combo", "scatter"].includes(type);
+    const supportsHierarchy = !["kpi", "gauge", "table", "matrix", "slicer", "scatter"].includes(type);
     const compact = type === "kpi";
     const visual: VisualDefinition = {
       id,
@@ -71,6 +72,7 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
       measure: ["table", "matrix", "slicer"].includes(type) ? undefined : measure,
       secondaryMeasure: needsSecondary ? secondaryMeasure : undefined,
       dimension: ["kpi", "gauge", "table", "matrix"].includes(type) ? undefined : dimension,
+      hierarchy: supportsHierarchy && dimension ? [dimension] : [],
       aggregation: "sum",
       display: { showTitle: true, showLegend: ["doughnut", "treemap", "funnel", "combo", "stackedBar", "stackedColumn"].includes(type), showDataLabels: false, showGridlines: true, accentColor: "#5c73e6", borderRadius: 10, titleAlignment: "left" },
       interaction: { crossFilter: true, tooltips: true },
@@ -177,7 +179,36 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
 }
 
 function BuildSettings({ selected, dimensions, measures, updateSelected, onDelete }: { selected: VisualDefinition; dimensions: Dataset["fields"]; measures: Dataset["fields"]; updateSelected: (changes: Partial<VisualDefinition>) => void; onDelete: () => void }) {
-  return <div className="form-stack"><div className="panel-header"><div><h3>Build visual</h3><p>{tools.find((item) => item.type === selected.type)?.label}</p></div><button className="icon-button danger" aria-label="Delete visual" onClick={onDelete}><Trash2 size={14} /></button></div><label>Title<input value={selected.title} onChange={(event) => updateSelected({ title: event.target.value })} /></label><label>Visual type<select value={selected.type} onChange={(event) => updateSelected({ type: event.target.value as VisualType })}>{tools.map((item) => <option value={item.type} key={item.type}>{item.label}</option>)}</select></label><label>Category / X-axis<select value={selected.dimension ?? ""} onChange={(event) => updateSelected({ dimension: event.target.value as VisualDefinition["dimension"] || undefined })}><option value="">None</option>{dimensions.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label><label>Value / Y-axis<select value={selected.measure ?? ""} onChange={(event) => updateSelected({ measure: event.target.value as VisualDefinition["measure"] || undefined })}><option value="">None</option>{measures.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label><label>Secondary value<select value={selected.secondaryMeasure ?? ""} onChange={(event) => updateSelected({ secondaryMeasure: event.target.value as VisualDefinition["secondaryMeasure"] || undefined })}><option value="">None</option>{measures.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label><label>Aggregation<select value={selected.aggregation ?? "sum"} onChange={(event) => updateSelected({ aggregation: event.target.value as Aggregation })}>{["sum", "average", "minimum", "maximum", "count", "distinctCount"].map((value) => <option key={value}>{value}</option>)}</select></label><label>Number format<select value={selected.format ?? "number"} onChange={(event) => updateSelected({ format: event.target.value as VisualDefinition["format"] })}><option value="number">Number</option><option value="percent">Percentage</option></select></label></div>;
+  const supportsHierarchy = Boolean(selected.dimension && selected.measure && !["gauge", "scatter", "slicer", "kpi", "table", "matrix"].includes(selected.type));
+  const hierarchy = [selected.dimension, ...(selected.hierarchy ?? [])]
+    .filter((field): field is keyof ManufacturingRecord => Boolean(field))
+    .filter((field, index, fields) => fields.indexOf(field) === index);
+  const updateDimension = (value: string) => {
+    const dimension = value as VisualDefinition["dimension"] || undefined;
+    const remaining = hierarchy.filter((field) => field !== dimension && field !== selected.dimension);
+    updateSelected({ dimension, hierarchy: dimension ? [dimension, ...remaining] : [] });
+  };
+  const updateHierarchyLevel = (index: number, value: string) => {
+    const next = [...hierarchy];
+    if (value) next[index] = value as keyof ManufacturingRecord;
+    else next.splice(index);
+    const unique = next.filter((field, fieldIndex, fields) => fields.indexOf(field) === fieldIndex);
+    updateSelected({ hierarchy: unique });
+  };
+  return <div className="form-stack">
+    <div className="panel-header"><div><h3>Build visual</h3><p>{tools.find((item) => item.type === selected.type)?.label}</p></div><button className="icon-button danger" aria-label="Delete visual" onClick={onDelete}><Trash2 size={14} /></button></div>
+    <label>Title<input value={selected.title} onChange={(event) => updateSelected({ title: event.target.value })} /></label>
+    <label>Visual type<select value={selected.type} onChange={(event) => updateSelected({ type: event.target.value as VisualType })}>{tools.map((item) => <option value={item.type} key={item.type}>{item.label}</option>)}</select></label>
+    <label>Category / X-axis<select value={selected.dimension ?? ""} onChange={(event) => updateDimension(event.target.value)}><option value="">None</option>{dimensions.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
+    {supportsHierarchy && <div className="settings-group hierarchy-settings"><strong>Drill hierarchy</strong><p>Click a category to drill when drill mode is active.</p>
+      <label>Drill level 2<select value={hierarchy[1] ?? ""} disabled={!selected.dimension} onChange={(event) => updateHierarchyLevel(1, event.target.value)}><option value="">None</option>{dimensions.filter((field) => field.key !== selected.dimension).map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
+      <label>Drill level 3<select value={hierarchy[2] ?? ""} disabled={hierarchy.length < 2} onChange={(event) => updateHierarchyLevel(2, event.target.value)}><option value="">None</option>{dimensions.filter((field) => !hierarchy.slice(0, 2).includes(field.key as keyof ManufacturingRecord)).map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
+    </div>}
+    <label>Value / Y-axis<select value={selected.measure ?? ""} onChange={(event) => updateSelected({ measure: event.target.value as VisualDefinition["measure"] || undefined })}><option value="">None</option>{measures.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
+    <label>Secondary value<select value={selected.secondaryMeasure ?? ""} onChange={(event) => updateSelected({ secondaryMeasure: event.target.value as VisualDefinition["secondaryMeasure"] || undefined })}><option value="">None</option>{measures.map((field) => <option value={field.key} key={field.id}>{field.displayName}</option>)}</select></label>
+    <label>Aggregation<select value={selected.aggregation ?? "sum"} onChange={(event) => updateSelected({ aggregation: event.target.value as Aggregation })}>{["sum", "average", "minimum", "maximum", "count", "distinctCount"].map((value) => <option key={value}>{value}</option>)}</select></label>
+    <label>Number format<select value={selected.format ?? "number"} onChange={(event) => updateSelected({ format: event.target.value as VisualDefinition["format"] })}><option value="number">Number</option><option value="percent">Percentage</option></select></label>
+  </div>;
 }
 
 function FormatSettings({ selected, updateDisplay, updateInteraction }: { selected: VisualDefinition; updateDisplay: (changes: NonNullable<VisualDefinition["display"]>) => void; updateInteraction: (changes: NonNullable<VisualDefinition["interaction"]>) => void }) {

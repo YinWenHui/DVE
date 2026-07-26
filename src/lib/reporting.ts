@@ -3,6 +3,21 @@ import type { Dataset, ManufacturingRecord, ReportFilterDefinition, VisualDefini
 
 export type ReportCanvasState = "ready" | "stale" | "empty-report" | "no-data" | "no-metadata-results" | "no-results" | "offline" | "error";
 
+export interface VisualDrillSelection {
+  field: keyof ManufacturingRecord;
+  value: string;
+}
+
+export function visualHierarchy(visual: VisualDefinition): Array<keyof ManufacturingRecord> {
+  const fields = [visual.dimension, ...(visual.hierarchy ?? [])].filter((field): field is keyof ManufacturingRecord => Boolean(field));
+  return fields.filter((field, index) => fields.indexOf(field) === index);
+}
+
+export function applyVisualDrillPath(rows: ManufacturingRecord[], path: VisualDrillSelection[]): ManufacturingRecord[] {
+  if (!path.length) return rows;
+  return rows.filter((row) => path.every(({ field, value }) => String(row[field] ?? "").toLocaleLowerCase() === value.toLocaleLowerCase()));
+}
+
 export function resolveReportCanvasState(input: {
   datasetStatus: Dataset["status"];
   totalRows: number;

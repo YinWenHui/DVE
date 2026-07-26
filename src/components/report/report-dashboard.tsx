@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Responsive, WidthProvider, type Layout } from "react-grid-layout";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Bookmark, Download, Filter, FilterX, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { CommentsPanel } from "./comments-panel";
 import { ReportCanvasState } from "./report-canvas-state";
@@ -12,7 +11,6 @@ import type { Dataset, ManufacturingRecord, Report, VisualDefinition } from "@/t
 interface Filters { from: string; to: string; Line: string; Model: string; Customer: string; Shift: string }
 interface PersonalBookmark { id: string; name: string; pageId: string; filters: Filters; createdAt: string }
 type InsightPane = "filters" | "bookmarks" | null;
-const ResponsiveGridLayout = WidthProvider(Responsive);
 
 export function ReportDashboard({ report, dataset, records, canComment }: { report: Report; dataset: Dataset; records: Record<string, unknown>[]; canComment: boolean }) {
   const [typedRecords, setTypedRecords] = useState(() => records as unknown as ManufacturingRecord[]);
@@ -102,8 +100,6 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     anchor.href = url; anchor.download = `${report.slug}.${format}`; anchor.click(); URL.revokeObjectURL(url);
   }
 
-  const layout = useMemo<Layout[]>(() => page.visuals.map((visual) => ({ i: visual.id, x: visual.x, y: visual.y, w: visual.w, h: visual.h, minH: 2 })), [page.visuals]);
-  const layouts = useMemo(() => ({ lg: layout }), [layout]);
   const activeCount = [filters.from, filters.to, filters.Line, filters.Model, filters.Customer, filters.Shift].filter(Boolean).length;
   const canvasState = resolveReportCanvasState({ datasetStatus: dataset.status, totalRows: typedRecords.length, metadataRows: metadataFiltered.length, filteredRows: filtered.length, visualCount: page.visuals.length });
 
@@ -126,9 +122,9 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
         <div className="source-strip"><span>Source updated <strong>{new Date(freshness.sourceUpdatedAt).toLocaleString()}</strong></span><span>Dataset imported <strong>{new Date(freshness.importedAt).toLocaleString()}</strong></span><span>Browser loaded <strong>{browserLoadedAt ? new Date(browserLoadedAt).toLocaleString() : "Loading…"}</strong></span><span>Rows in context <strong>{filtered.length.toLocaleString()}</strong></span></div>
         <ReportCanvasState state={canvasState} datasetStatus={dataset.status} onReset={() => setFilters(defaultFilters)}>
           <section className="report-canvas" data-report-canvas>
-            <ResponsiveGridLayout className="layout" layouts={layouts} breakpoints={{ lg: 1100, md: 850, sm: 620, xs: 420, xxs: 0 }} cols={{ lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 }} rowHeight={54} margin={[10, 10]} isDraggable={false} isResizable={false} measureBeforeMount>
-              {page.visuals.map((visual) => <div key={visual.id}><ReportVisual visual={visual} rows={filtered} activeFilters={filters} onSelect={selectCategory} onFocus={setFocusedVisual} onShowData={setDataVisual} /></div>)}
-            </ResponsiveGridLayout>
+            <div className="report-grid">
+              {page.visuals.map((visual) => <div className="report-grid-item" style={reportGridStyle(visual)} key={visual.id}><ReportVisual visual={visual} rows={filtered} activeFilters={filters} onSelect={selectCategory} onFocus={setFocusedVisual} onShowData={setDataVisual} /></div>)}
+            </div>
           </section>
         </ReportCanvasState>
       </div>
@@ -138,6 +134,16 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     {focusedVisual && <VisualDialog title={`${focusedVisual.title} — focus mode`} onClose={() => setFocusedVisual(undefined)}><ReportVisual visual={focusedVisual} rows={filtered} activeFilters={filters} onSelect={selectCategory} showActions={false} /></VisualDialog>}
     {dataVisual && <VisualDialog title={`${dataVisual.title} — underlying data`} onClose={() => setDataVisual(undefined)}><VisualDataTable visual={dataVisual} rows={filtered} dataset={dataset} /></VisualDialog>}
   </main>;
+}
+
+function reportGridStyle(visual: VisualDefinition): CSSProperties {
+  return {
+    "--report-grid-column": `${visual.x + 1} / span ${visual.w}`,
+    "--report-grid-row": `${visual.y + 1} / span ${visual.h}`,
+    "--report-grid-height": visual.h,
+    "--report-grid-compact-width": Math.min(6, visual.w),
+    "--report-grid-mobile-width": Math.min(2, visual.w),
+  } as CSSProperties;
 }
 
 function FiltersPane({ filters, setFilters, unique, reportFilterCount, pageFilterCount, onClose }: { filters: Filters; setFilters: (filters: Filters) => void; unique: (field: "Line" | "Model" | "Customer" | "Shift") => string[]; reportFilterCount: number; pageFilterCount: number; onClose: () => void }) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSyntheticRecords } from "@/data/seed";
-import { aggregateRows, applyReportFilters, chartOption, resolveReportCanvasState, visualData } from "@/lib/reporting";
+import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, resolveReportCanvasState, visualData, visualHierarchy } from "@/lib/reporting";
 import type { VisualDefinition } from "@/types";
 
 describe("report visual metadata", () => {
@@ -17,6 +17,14 @@ describe("report visual metadata", () => {
     const data = visualData(visual, rows);
     expect(data.columns).toEqual(["Line", "ActualQty", "PlanQty"]);
     expect(data.rows).toHaveLength(3);
+  });
+
+  it("resolves hierarchy levels and carries the selected parent context", () => {
+    const visual: VisualDefinition = { id: "drill", type: "bar", title: "Output hierarchy", x: 0, y: 0, w: 6, h: 5, dimension: "Line", hierarchy: ["Line", "Model", "Shift", "Line"], measure: "ActualQty", aggregation: "sum" };
+    expect(visualHierarchy(visual)).toEqual(["Line", "Model", "Shift"]);
+    const drilled = applyVisualDrillPath(rows, [{ field: "Line", value: "line a" }, { field: "Model", value: "Model X100" }]);
+    expect(drilled).not.toHaveLength(0);
+    expect(drilled.every((row) => row.Line === "Line A" && row.Model === "Model X100")).toBe(true);
   });
 
   it("builds chart options for the expanded visual catalog", () => {
