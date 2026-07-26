@@ -219,14 +219,16 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
   }
 
   const activeCount = [filters.from, filters.to, filters.Line, filters.Model, filters.Customer, filters.Shift].filter(Boolean).length + effectiveReportFilters.length + effectivePageFilters.length + drillContext.length + visualSelections.length;
-  const canvasState = resolveReportCanvasState({ datasetStatus: dataset.status, totalRows: typedRecords.length, metadataRows: metadataFiltered.length, filteredRows: filtered.length, visualCount: page.visuals.length + (page.controls?.length ?? 0) });
+  const visibleVisuals = page.visuals.filter((visual) => !visual.hidden);
+  const visibleControls = page.controls?.filter((control) => !control.hidden) ?? [];
+  const canvasState = resolveReportCanvasState({ datasetStatus: dataset.status, totalRows: typedRecords.length, metadataRows: metadataFiltered.length, filteredRows: filtered.length, visualCount: visibleVisuals.length + visibleControls.length });
   const interactionRowsFor = (visualId: string) => resolveVisualInteractionRows(page, visualId, filtered, visualSelections);
-  const canVisualInteract = (visualId: string) => page.visuals.some((target) => visualInteractionMode(page, visualId, target.id) !== "none");
+  const canVisualInteract = (visualId: string) => visibleVisuals.some((target) => visualInteractionMode(page, visualId, target.id) !== "none");
   const focusedRows = focusedVisual ? interactionRowsFor(focusedVisual.id) : undefined;
   const dataRows = dataVisual ? interactionRowsFor(dataVisual.id) : undefined;
   const drillRows = drillVisual ? interactionRowsFor(drillVisual.id) : undefined;
 
-  return <main className="report-page">
+  return <main className="report-page" style={reportThemeStyle(report)} data-report-theme={report.theme?.name}>
     <nav className="report-tabs" aria-label="Report pages">
       {drillHistory.length > 0 && <button className="report-tab drillthrough-back" onClick={returnFromDrillthrough}><ArrowLeft size={13} /> Back</button>}
       {visiblePages.map((item) => <button className={`report-tab ${item.id === page.id ? "active" : ""}`} key={item.id} onClick={() => openPage(item.id)}>{item.name}</button>)}
@@ -248,15 +250,15 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
       <div className="report-workspace-main">
         <div className="source-strip"><span>Source updated <strong>{new Date(freshness.sourceUpdatedAt).toLocaleString()}</strong></span><span>Dataset imported <strong>{new Date(freshness.importedAt).toLocaleString()}</strong></span><span>Browser loaded <strong>{browserLoadedAt ? new Date(browserLoadedAt).toLocaleString() : "Loading…"}</strong></span><span>Rows in context <strong>{filtered.length.toLocaleString()}</strong></span>{visualSelections.length > 0 && <span>Visual selections <strong>{visualSelections.length}</strong></span>}</div>
         <ReportCanvasState state={canvasState} datasetStatus={dataset.status} onReset={() => { setFilters(defaultFilters); setVisualSelections([]); setFilterOverrides({}); }}>
-          <section className="report-canvas" data-report-canvas>
+          <section className="report-canvas" data-report-canvas style={reportCanvasStyle(report, page)}>
             <div className="report-grid">
-              {page.visuals.map((visual) => {
+              {visibleVisuals.map((visual) => {
                 const canDrillthrough = visualHierarchy(visual).some((field) => drillthroughTargets(report.pages, page.id, field).length > 0);
                 const interactionRows = interactionRowsFor(visual.id);
                 const selectedValue = visualSelections.find((selection) => selection.sourceVisualId === visual.id)?.value;
                 return <div className="report-grid-item" style={reportGridStyle(visual)} data-visual-title={visual.title} data-filtered-rows={interactionRows.rows.length} data-highlighted-rows={interactionRows.highlightRows?.length} key={visual.id}><ReportVisual visual={visual} rows={interactionRows.rows} highlightRows={interactionRows.highlightRows} selectedValue={selectedValue} activeFilters={filters} onSelect={canVisualInteract(visual.id) ? (field, value) => selectCategory(visual.id, field, value) : undefined} onFocus={setFocusedVisual} onShowData={setDataVisual} onDrillthrough={canDrillthrough ? setDrillVisual : undefined} /></div>;
               })}
-              {page.controls?.map((control) => <div className="report-grid-item" style={reportGridStyle(control)} key={control.id}><ReportControl control={control} pages={report.pages} bookmarks={report.bookmarks ?? []} activePageId={page.id} activeBookmarkId={activeReportBookmarkId} onAction={runReportAction} /></div>)}
+              {visibleControls.map((control) => <div className="report-grid-item" style={reportGridStyle(control)} key={control.id}><ReportControl control={control} pages={report.pages} bookmarks={report.bookmarks ?? []} activePageId={page.id} activeBookmarkId={activeReportBookmarkId} onAction={runReportAction} /></div>)}
             </div>
           </section>
         </ReportCanvasState>
@@ -268,6 +270,29 @@ export function ReportDashboard({ report, dataset, records, canComment }: { repo
     {dataVisual && dataRows && <VisualDialog title={`${dataVisual.title} — underlying data`} onClose={() => setDataVisual(undefined)}><VisualDataTable visual={dataVisual} rows={dataRows.rows} dataset={dataset} /></VisualDialog>}
     {drillVisual && drillRows && <DrillthroughDialog visual={drillVisual} rows={drillRows.rows} targets={drillthroughTargets(report.pages, page.id, drillVisual.dimension)} onEnter={enterDrillthrough} onClose={() => setDrillVisual(undefined)} />}
   </main>;
+}
+
+function reportThemeStyle(report: Report): CSSProperties {
+  if (!report.theme) return {};
+  return {
+    "--accent": report.theme.accentColor,
+    "--accent-2": report.theme.secondaryColor,
+    "--surface": report.theme.surfaceColor,
+    "--text": report.theme.textColor,
+    fontFamily: report.theme.fontFamily,
+  } as CSSProperties;
+}
+
+function reportCanvasStyle(report: Report, page: ReportPage): CSSProperties {
+  const canvas = page.canvas ?? {};
+  const wallpaper = canvas.wallpaperUrl?.trim();
+  return {
+    backgroundColor: canvas.backgroundColor ?? report.theme?.canvasColor,
+    backgroundImage: wallpaper ? `url(${JSON.stringify(wallpaper)})` : undefined,
+    backgroundPosition: "center",
+    backgroundRepeat: canvas.wallpaperFit === "contain" ? "no-repeat" : undefined,
+    backgroundSize: canvas.wallpaperFit === "fill" ? "100% 100%" : canvas.wallpaperFit ?? "cover",
+  };
 }
 
 function reportGridStyle(visual: { x: number; y: number; w: number; h: number }): CSSProperties {

@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import GridLayout, { type Layout } from "react-grid-layout";
-import { Ban, BarChart3, Bookmark, ChevronDown, ChevronUp, Copy, CreditCard, Eye, EyeOff, Filter, Layers3, LineChart, MousePointerClick, Navigation, Paintbrush, Plus, RotateCcw, Save, SlidersHorizontal, Sparkles, Table2, Trash2 } from "lucide-react";
+import { Ban, BarChart3, Bookmark, Check, ChevronDown, ChevronUp, Clipboard, Copy, CreditCard, Eye, EyeOff, Filter, Layers3, LineChart, ListTree, MousePointerClick, Navigation, Paintbrush, Plus, Redo2, RotateCcw, Save, SlidersHorizontal, Sparkles, Table2, Trash2, Undo2 } from "lucide-react";
 import { ReportControl } from "@/components/report/report-control";
 import { ReportVisual } from "@/components/report/report-visual";
-import type { Aggregation, ConditionalFormattingOperator, ConditionalFormattingRule, Dataset, ManufacturingRecord, Report, ReportActionType, ReportBookmarkDefinition, ReportControlDefinition, ReportControlType, ReportFilterDefinition, ReportPage, VisualDefinition, VisualInteractionMode, VisualType } from "@/types";
+import { snapReportLayout } from "@/lib/report-authoring";
+import type { Aggregation, ConditionalFormattingOperator, ConditionalFormattingRule, Dataset, ManufacturingRecord, Report, ReportActionType, ReportBookmarkDefinition, ReportControlDefinition, ReportControlType, ReportFilterDefinition, ReportFormatPreset, ReportPage, ReportPageCanvasOptions, ReportThemeDefinition, VisualDefinition, VisualInteractionMode, VisualType } from "@/types";
 
 const tools: Array<{ type: VisualType; label: string; icon: typeof BarChart3 }> = [
   { type: "kpi", label: "KPI card", icon: CreditCard },
@@ -28,7 +29,29 @@ const tools: Array<{ type: VisualType; label: string; icon: typeof BarChart3 }> 
   { type: "slicer", label: "Slicer", icon: SlidersHorizontal },
 ];
 
-type SettingsTab = "build" | "format" | "filters";
+type SettingsTab = "build" | "format" | "filters" | "selection";
+
+const defaultTheme: ReportThemeDefinition = {
+  name: "Digital Verse",
+  accentColor: "#5c73e6",
+  secondaryColor: "#2fb3c2",
+  canvasColor: "#eef2f8",
+  surfaceColor: "#ffffff",
+  textColor: "#172033",
+  fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+};
+
+interface BuilderSnapshot {
+  pages: ReportPage[];
+  reportFilters: ReportFilterDefinition[];
+  bookmarks: ReportBookmarkDefinition[];
+  theme: ReportThemeDefinition;
+  formatPresets: ReportFormatPreset[];
+}
+
+type BuilderClipboard =
+  | { kind: "visual"; item: VisualDefinition }
+  | { kind: "control"; item: ReportControlDefinition };
 
 export function ReportBuilder({ datasets, records = [], initial }: { datasets: Dataset[]; records?: Record<string, unknown>[]; initial?: Report }) {
   const router = useRouter();
@@ -40,11 +63,17 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   const [pages, setPages] = useState<ReportPage[]>(() => structuredClone(initial?.pages ?? [{ id: crypto.randomUUID(), name: "Overview", ordinal: 0, visuals: [] }]));
   const [reportFilters, setReportFilters] = useState<ReportFilterDefinition[]>(() => structuredClone(initial?.filters ?? []));
   const [bookmarks, setBookmarks] = useState<ReportBookmarkDefinition[]>(() => structuredClone(initial?.bookmarks ?? []));
+  const [theme, setTheme] = useState<ReportThemeDefinition>(() => structuredClone(initial?.theme ?? defaultTheme));
+  const [formatPresets, setFormatPresets] = useState<ReportFormatPreset[]>(() => structuredClone(initial?.formatPresets ?? []));
   const [pageIndex, setPageIndex] = useState(0);
   const [selectedId, setSelectedId] = useState<string>();
   const [selectedBookmarkId, setSelectedBookmarkId] = useState<string>();
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("build");
   const [message, setMessage] = useState<string>();
+  const [clipboard, setClipboard] = useState<BuilderClipboard>();
+  const [historyDepth, setHistoryDepth] = useState({ undo: 0, redo: 0 });
+  const undoStack = useRef<BuilderSnapshot[]>([]);
+  const redoStack = useRef<BuilderSnapshot[]>([]);
   const page = pages[pageIndex] ?? pages[0];
   const selected = page?.visuals.find((visual) => visual.id === selectedId);
   const selectedControl = page?.controls?.find((control) => control.id === selectedId);
@@ -55,9 +84,48 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   const filterFields = selectedDataset?.fields.filter((field) => !field.hidden && field.filterable) ?? [];
   const previewRows = records as unknown as ManufacturingRecord[];
   const layout = useMemo<Layout[]>(() => [
-    ...(page?.visuals.map((visual) => ({ i: visual.id, x: visual.x, y: visual.y, w: visual.w, h: visual.h, minW: 2, minH: 2 })) ?? []),
-    ...(page?.controls?.map((control) => ({ i: control.id, x: control.x, y: control.y, w: control.w, h: control.h, minW: 2, minH: 1 })) ?? []),
+    ...(page?.visuals.filter((visual) => !visual.hidden).map((visual) => ({ i: visual.id, x: visual.x, y: visual.y, w: visual.w, h: visual.h, minW: 2, minH: 2 })) ?? []),
+    ...(page?.controls?.filter((control) => !control.hidden).map((control) => ({ i: control.id, x: control.x, y: control.y, w: control.w, h: control.h, minW: 2, minH: 1 })) ?? []),
   ], [page]);
+  const canUndo = historyDepth.undo > 0;
+  const canRedo = historyDepth.redo > 0;
+
+  const createSnapshot = useCallback((): BuilderSnapshot => structuredClone({ pages, reportFilters, bookmarks, theme, formatPresets }), [bookmarks, formatPresets, pages, reportFilters, theme]);
+
+  const checkpoint = useCallback(() => {
+    undoStack.current = [...undoStack.current.slice(-49), createSnapshot()];
+    redoStack.current = [];
+    setHistoryDepth({ undo: undoStack.current.length, redo: 0 });
+  }, [createSnapshot]);
+
+  const restoreSnapshot = useCallback((snapshot: BuilderSnapshot) => {
+    setPages(structuredClone(snapshot.pages));
+    setReportFilters(structuredClone(snapshot.reportFilters));
+    setBookmarks(structuredClone(snapshot.bookmarks));
+    setTheme(structuredClone(snapshot.theme));
+    setFormatPresets(structuredClone(snapshot.formatPresets));
+    setPageIndex((current) => Math.min(current, Math.max(0, snapshot.pages.length - 1)));
+    setSelectedId(undefined);
+    setSelectedBookmarkId(undefined);
+  }, []);
+
+  const undo = useCallback(() => {
+    const previous = undoStack.current.at(-1);
+    if (!previous) return;
+    redoStack.current = [...redoStack.current.slice(-49), createSnapshot()];
+    undoStack.current = undoStack.current.slice(0, -1);
+    restoreSnapshot(previous);
+    setHistoryDepth({ undo: undoStack.current.length, redo: redoStack.current.length });
+  }, [createSnapshot, restoreSnapshot]);
+
+  const redo = useCallback(() => {
+    const next = redoStack.current.at(-1);
+    if (!next) return;
+    undoStack.current = [...undoStack.current.slice(-49), createSnapshot()];
+    redoStack.current = redoStack.current.slice(0, -1);
+    restoreSnapshot(next);
+    setHistoryDepth({ undo: undoStack.current.length, redo: redoStack.current.length });
+  }, [createSnapshot, restoreSnapshot]);
 
   function addVisual(type: VisualType) {
     if (!page) return;
@@ -82,7 +150,7 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
       dimension: ["kpi", "gauge", "table", "matrix"].includes(type) ? undefined : dimension,
       hierarchy: supportsHierarchy && dimension ? [dimension] : [],
       aggregation: "sum",
-      display: { showTitle: true, showLegend: ["doughnut", "treemap", "funnel", "combo", "stackedBar", "stackedColumn"].includes(type), showDataLabels: false, showGridlines: true, accentColor: "#5c73e6", borderRadius: 10, titleAlignment: "left" },
+      display: { showTitle: true, showLegend: ["doughnut", "treemap", "funnel", "combo", "stackedBar", "stackedColumn"].includes(type), showDataLabels: false, showGridlines: true, accentColor: theme.accentColor, backgroundColor: theme.surfaceColor, borderRadius: 10, titleAlignment: "left" },
       interaction: { crossFilter: true, tooltips: true },
       filters: [],
     };
@@ -106,7 +174,7 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
       w: type === "button" ? 3 : 6,
       h: 1,
       action: type === "button" ? { type: "page", targetId: firstVisiblePage?.id } : undefined,
-      display: { accentColor: "#5c73e6", backgroundColor: "#ffffff", textColor: "#172033", borderRadius: 9 },
+      display: { accentColor: theme.accentColor, backgroundColor: theme.surfaceColor, textColor: theme.textColor, borderRadius: 9 },
     };
     updatePage({ ...page, controls: [...(page.controls ?? []), control] });
     setSelectedId(id);
@@ -114,7 +182,8 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
     setSettingsTab("build");
   }
 
-  function updatePage(nextPage: ReportPage) {
+  function updatePage(nextPage: ReportPage, recordHistory = true) {
+    if (recordHistory) checkpoint();
     setPages((current) => current.map((item, index) => index === pageIndex ? nextPage : item));
   }
 
@@ -130,12 +199,14 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
 
   function updateBookmark(changes: Partial<ReportBookmarkDefinition>) {
     if (!selectedBookmarkId) return;
+    checkpoint();
     setBookmarks((current) => current.map((bookmark) => bookmark.id === selectedBookmarkId ? { ...bookmark, ...changes } : bookmark));
   }
 
   function addBookmark() {
     if (!page) return;
     const id = crypto.randomUUID();
+    checkpoint();
     setBookmarks((current) => [...current, { id, name: `Bookmark ${current.length + 1}`, pageId: page.id, filters: {} }]);
     setSelectedBookmarkId(id);
     setSelectedId(undefined);
@@ -159,25 +230,24 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
   }
 
   function changeLayout(next: Layout[]) {
-    setPages((current) => {
-      const currentPage = current[pageIndex];
-      if (!currentPage) return current;
-      let changed = false;
-      const updatePositions = <T extends { id: string; x: number; y: number; w: number; h: number },>(items: T[]): T[] => items.map((item) => {
-        const position = next.find((nextItem) => nextItem.i === item.id);
-        if (!position || (item.x === position.x && item.y === position.y && item.w === position.w && item.h === position.h)) return item;
-        changed = true;
-        return { ...item, x: position.x, y: position.y, w: position.w, h: position.h };
-      });
-      const visuals = updatePositions(currentPage.visuals);
-      const controls = updatePositions(currentPage.controls ?? []);
-      if (!changed) return current;
-      return current.map((item, index) => index === pageIndex ? { ...currentPage, visuals, controls } : item);
+    if (!page) return;
+    const canvas = page.canvas ?? {};
+    const normalized = snapReportLayout(next, canvas.snapToGrid !== false, canvas.gridSize ?? 1);
+    let changed = false;
+    const updatePositions = <T extends { id: string; x: number; y: number; w: number; h: number },>(items: T[]): T[] => items.map((item) => {
+      const position = normalized.find((nextItem) => nextItem.i === item.id);
+      if (!position || (item.x === position.x && item.y === position.y && item.w === position.w && item.h === position.h)) return item;
+      changed = true;
+      return { ...item, x: position.x, y: position.y, w: position.w, h: position.h };
     });
+    const visuals = updatePositions(page.visuals);
+    const controls = updatePositions(page.controls ?? []);
+    if (changed) updatePage({ ...page, visuals, controls }, false);
   }
 
   function addPage() {
-    const next: ReportPage = { id: crypto.randomUUID(), name: `Page ${pages.length + 1}`, ordinal: pages.length, visuals: [], filters: [] };
+    const next: ReportPage = { id: crypto.randomUUID(), name: `Page ${pages.length + 1}`, ordinal: pages.length, visuals: [], filters: [], canvas: { backgroundColor: theme.canvasColor, showGrid: true, snapToGrid: true, gridSize: 1 } };
+    checkpoint();
     setPages((current) => [...current, next]);
     setPageIndex(pages.length);
     setSelectedId(undefined);
@@ -200,6 +270,7 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
         return sourceVisualId && targetVisualId ? [{ ...interaction, sourceVisualId, targetVisualId }] : [];
       }),
     };
+    checkpoint();
     setPages((current) => [...current, next]);
     setPageIndex(pages.length);
     setSelectedId(undefined);
@@ -215,6 +286,7 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
       ordinal: index,
       controls: item.controls?.map((control) => control.action?.type === "page" && control.action.targetId === page.id ? { ...control, action: { ...control.action, targetId: fallbackPageId } } : control),
     }));
+    checkpoint();
     setPages(next);
     setBookmarks((current) => current.map((bookmark) => bookmark.pageId === page.id && fallbackPageId ? { ...bookmark, pageId: fallbackPageId } : bookmark));
     setPageIndex(Math.max(0, Math.min(pageIndex, next.length - 1)));
@@ -237,8 +309,97 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
     updatePage({ ...page, drillthrough: { ...page.drillthrough, fields } });
   }
 
+  function updateReportTheme(changes: Partial<ReportThemeDefinition>) {
+    checkpoint();
+    setTheme((current) => ({ ...current, ...changes }));
+  }
+
+  function updatePageCanvas(changes: Partial<ReportPageCanvasOptions>) {
+    if (!page) return;
+    updatePage({ ...page, canvas: { ...page.canvas, ...changes } });
+  }
+
+  function applyThemeToVisuals() {
+    if (!page) return;
+    updatePage({ ...page, visuals: page.visuals.map((visual) => ({ ...visual, display: { ...visual.display, accentColor: theme.accentColor, backgroundColor: theme.surfaceColor } })), controls: page.controls?.map((control) => ({ ...control, display: { ...control.display, accentColor: theme.accentColor, backgroundColor: theme.surfaceColor, textColor: theme.textColor } })) });
+    setMessage(`Applied ${theme.name} to ${page.name}.`);
+  }
+
+  function saveFormatPreset(presetName: string) {
+    if (!selected || !presetName.trim()) return;
+    checkpoint();
+    setFormatPresets((current) => [...current, { id: crypto.randomUUID(), name: presetName.trim(), display: structuredClone(selected.display ?? {}) }]);
+  }
+
+  function deleteFormatPreset(id: string) {
+    checkpoint();
+    setFormatPresets((current) => current.filter((preset) => preset.id !== id));
+  }
+
+  function copySelection() {
+    if (selected) setClipboard({ kind: "visual", item: structuredClone(selected) });
+    else if (selectedControl) setClipboard({ kind: "control", item: structuredClone(selectedControl) });
+  }
+
+  function pasteSelection() {
+    if (!page || !clipboard) return;
+    const id = crypto.randomUUID();
+    const snapPlacement = (item: { x: number; y: number; w: number; h: number }) => snapReportLayout([{ i: id, x: Math.min(10, item.x + 1), y: item.y + 1, w: item.w, h: item.h }], page.canvas?.snapToGrid !== false, page.canvas?.gridSize ?? 1)[0]!;
+    if (clipboard.kind === "visual") {
+      const placement = snapPlacement(clipboard.item);
+      const item = { ...structuredClone(clipboard.item), id, title: `${clipboard.item.title} copy`, x: placement.x, y: placement.y, w: placement.w, h: placement.h, hidden: false };
+      updatePage({ ...page, visuals: [...page.visuals, item] });
+    } else {
+      const placement = snapPlacement(clipboard.item);
+      const item = { ...structuredClone(clipboard.item), id, title: `${clipboard.item.title} copy`, x: placement.x, y: placement.y, w: placement.w, h: placement.h, hidden: false };
+      updatePage({ ...page, controls: [...(page.controls ?? []), item] });
+    }
+    setSelectedId(id);
+    setSelectedBookmarkId(undefined);
+  }
+
+  function deleteBookmark(id: string) {
+    checkpoint();
+    setBookmarks((current) => current.filter((bookmark) => bookmark.id !== id));
+    setPages((current) => current.map((item) => ({ ...item, controls: item.controls?.map((control) => control.action?.type === "bookmark" && control.action.targetId === id ? { ...control, action: { type: "resetFilters" } } : control) })));
+    setSelectedBookmarkId(undefined);
+  }
+
+  function updateItemVisibility(id: string, hidden: boolean) {
+    if (!page) return;
+    updatePage({ ...page, visuals: page.visuals.map((visual) => visual.id === id ? { ...visual, hidden } : visual), controls: page.controls?.map((control) => control.id === id ? { ...control, hidden } : control) });
+  }
+
+  function moveItem(id: string, direction: -1 | 1) {
+    if (!page) return;
+    const reorder = <T extends { id: string }>(items: T[]): T[] => {
+      const index = items.findIndex((item) => item.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= items.length) return items;
+      const next = [...items];
+      [next[index], next[target]] = [next[target]!, next[index]!];
+      return next;
+    };
+    updatePage({ ...page, visuals: reorder(page.visuals), controls: reorder(page.controls ?? []) });
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const key = event.key.toLocaleLowerCase();
+      if (key === "z") { event.preventDefault(); if (event.shiftKey) redo(); else undo(); }
+      else if (key === "y") { event.preventDefault(); redo(); }
+      else if (key === "c") { event.preventDefault(); copySelection(); }
+      else if (key === "v") { event.preventDefault(); pasteSelection(); }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
+
   async function save(status: Report["status"] = initial?.status ?? "draft") {
-    const body = { name, slug, datasetId, description, status, filters: reportFilters, bookmarks, pages };
+    const body = { name, slug, datasetId, description, status, filters: reportFilters, bookmarks, theme, formatPresets, pages };
     const response = await fetch(initial ? `/api/reports/${initial.id}` : "/api/reports", { method: initial ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const payload = await response.json() as { report?: Report; error?: { message?: string } };
     setMessage(response.ok ? `Report ${status === "published" ? "published" : "saved"}.` : payload.error?.message ?? "Save failed.");
@@ -270,21 +431,40 @@ export function ReportBuilder({ datasets, records = [], initial }: { datasets: D
         <div className="builder-tool-list">{bookmarks.map((bookmark) => <button className={`builder-tool ${bookmark.id === selectedBookmarkId ? "active" : ""}`} key={bookmark.id} onClick={() => { setSelectedBookmarkId(bookmark.id); setSelectedId(undefined); setSettingsTab("build"); }}><Bookmark size={13} />{bookmark.name}</button>)}{!bookmarks.length && <p className="muted filter-empty">Add a shared view for buttons and bookmark navigators.</p>}</div>
       </aside>
       <section className="builder-canvas">
-        <div className="builder-canvas-label"><span>Canvas</span><small>Drag headers to move · drag corners to resize</small></div>
-        <GridLayout layout={layout} cols={12} rowHeight={54} width={900} margin={[8, 8]} onLayoutChange={changeLayout} draggableHandle=".builder-visual-handle">
-          {page?.visuals.map((visual) => <div key={visual.id} onClick={() => { setSelectedId(visual.id); setSelectedBookmarkId(undefined); }}><div className={`builder-preview ${selectedId === visual.id ? "selected" : ""}`}><button className="builder-visual-handle" aria-label={`Move ${visual.title}`}>{visual.title}</button><div className="builder-preview-body"><ReportVisual visual={visual} rows={previewRows} showActions={false} /></div></div></div>)}
-          {page?.controls?.map((control) => <div key={control.id} onClick={() => { setSelectedId(control.id); setSelectedBookmarkId(undefined); }}><div className={`builder-preview ${selectedId === control.id ? "selected" : ""}`}><button className="builder-visual-handle" aria-label={`Move ${control.title}`}>{control.title}</button><div className="builder-preview-body"><ReportControl control={control} pages={pages} bookmarks={bookmarks} activePageId={page.id} /></div></div></div>)}
-        </GridLayout>
+        <div className="builder-canvas-label"><span>Canvas</span><div className="builder-canvas-toolbar" role="toolbar" aria-label="Canvas editing"><button className="icon-button" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={undo}><Undo2 size={14} /></button><button className="icon-button" aria-label="Redo" title="Redo (Ctrl+Y)" disabled={!canRedo} onClick={redo}><Redo2 size={14} /></button><button className="icon-button" aria-label="Copy selected item" title="Copy (Ctrl+C)" disabled={!selected && !selectedControl} onClick={copySelection}><Copy size={14} /></button><button className="icon-button" aria-label="Paste copied item" title="Paste (Ctrl+V)" disabled={!clipboard} onClick={pasteSelection}><Clipboard size={14} /></button><small>Drag headers to move · drag corners to resize</small></div></div>
+        <div className="builder-grid-stage" data-show-grid={page?.canvas?.showGrid !== false} style={builderCanvasStyle(page, theme)}>
+          <GridLayout layout={layout} cols={12} rowHeight={54} width={900} margin={[8, 8]} onLayoutChange={changeLayout} onDragStart={checkpoint} onResizeStart={checkpoint} draggableHandle=".builder-visual-handle">
+            {page?.visuals.filter((visual) => !visual.hidden).map((visual) => <div key={visual.id} onClick={() => { setSelectedId(visual.id); setSelectedBookmarkId(undefined); }}><div className={`builder-preview ${selectedId === visual.id ? "selected" : ""}`}><button className="builder-visual-handle" aria-label={`Move ${visual.title}`}>{visual.title}</button><div className="builder-preview-body"><ReportVisual visual={visual} rows={previewRows} showActions={false} /></div></div></div>)}
+            {page?.controls?.filter((control) => !control.hidden).map((control) => <div key={control.id} onClick={() => { setSelectedId(control.id); setSelectedBookmarkId(undefined); }}><div className={`builder-preview ${selectedId === control.id ? "selected" : ""}`}><button className="builder-visual-handle" aria-label={`Move ${control.title}`}>{control.title}</button><div className="builder-preview-body"><ReportControl control={control} pages={pages} bookmarks={bookmarks} activePageId={page.id} /></div></div></div>)}
+          </GridLayout>
+        </div>
         {!page?.visuals.length && !page?.controls?.length && <div className="empty-state">Add a visual or navigation control from the left pane, then drag and resize it on this canvas.</div>}
       </section>
       <aside className="builder-pane builder-settings-pane">
-        <div className="builder-settings-tabs"><button className={settingsTab === "build" ? "active" : ""} onClick={() => setSettingsTab("build")}><Layers3 size={14} /> Build</button><button className={settingsTab === "format" ? "active" : ""} onClick={() => setSettingsTab("format")}><Paintbrush size={14} /> Format</button><button className={settingsTab === "filters" ? "active" : ""} onClick={() => setSettingsTab("filters")}><SlidersHorizontal size={14} /> Filters</button></div>
-        {settingsTab === "build" && (selected ? <BuildSettings selected={selected} dimensions={dimensions} measures={measures} updateSelected={updateSelected} onDelete={() => { if (!page) return; updatePage({ ...page, visuals: page.visuals.filter((visual) => visual.id !== selected.id), interactions: page.interactions?.filter((interaction) => interaction.sourceVisualId !== selected.id && interaction.targetVisualId !== selected.id) }); setSelectedId(undefined); }} /> : selectedControl ? <ControlBuildSettings selected={selectedControl} pages={pages} bookmarks={bookmarks} updateSelected={updateSelectedControl} onDelete={() => { if (!page) return; updatePage({ ...page, controls: (page.controls ?? []).filter((control) => control.id !== selectedControl.id) }); setSelectedId(undefined); }} /> : selectedBookmark ? <BookmarkSettings selected={selectedBookmark} pages={pages} rows={previewRows} updateSelected={updateBookmark} onDelete={() => { setBookmarks((current) => current.filter((bookmark) => bookmark.id !== selectedBookmark.id)); setPages((current) => current.map((item) => ({ ...item, controls: item.controls?.map((control) => control.action?.type === "bookmark" && control.action.targetId === selectedBookmark.id ? { ...control, action: { type: "resetFilters" } } : control) }))); setSelectedBookmarkId(undefined); }} /> : <div className="empty-state compact">Select a visual, control, or report bookmark to configure it.</div>)}
-        {settingsTab === "format" && (selected ? <FormatSettings selected={selected} page={page} measures={measures} updateSelected={updateSelected} updateDisplay={updateDisplay} updateInteraction={updateInteraction} updateVisualInteraction={updateVisualInteraction} /> : selectedControl ? <ControlFormatSettings selected={selectedControl} updateSelected={updateSelectedControl} /> : <div className="empty-state compact">Select a visual or control to format its appearance and behavior.</div>)}
-        {settingsTab === "filters" && <div className="builder-filter-scopes">{selected && <FilterEditor title="Filters on this visual" filters={selected.filters ?? []} fields={filterFields} onChange={(filters) => updateSelected({ filters })} />}<FilterEditor title="Filters on this page" filters={page?.filters ?? []} fields={filterFields} onChange={(filters) => page && updatePage({ ...page, filters })} /><FilterEditor title="Filters on all pages" filters={reportFilters} fields={filterFields} onChange={setReportFilters} /></div>}
+        <div className="builder-settings-tabs"><button className={settingsTab === "build" ? "active" : ""} onClick={() => setSettingsTab("build")}><Layers3 size={14} /> Build</button><button className={settingsTab === "format" ? "active" : ""} onClick={() => setSettingsTab("format")}><Paintbrush size={14} /> Format</button><button className={settingsTab === "filters" ? "active" : ""} onClick={() => setSettingsTab("filters")}><SlidersHorizontal size={14} /> Filters</button><button className={settingsTab === "selection" ? "active" : ""} onClick={() => setSettingsTab("selection")}><ListTree size={14} /> Selection</button></div>
+        {settingsTab === "build" && (selected ? <BuildSettings selected={selected} dimensions={dimensions} measures={measures} updateSelected={updateSelected} onDelete={() => { if (!page) return; updatePage({ ...page, visuals: page.visuals.filter((visual) => visual.id !== selected.id), interactions: page.interactions?.filter((interaction) => interaction.sourceVisualId !== selected.id && interaction.targetVisualId !== selected.id) }); setSelectedId(undefined); }} /> : selectedControl ? <ControlBuildSettings selected={selectedControl} pages={pages} bookmarks={bookmarks} updateSelected={updateSelectedControl} onDelete={() => { if (!page) return; updatePage({ ...page, controls: (page.controls ?? []).filter((control) => control.id !== selectedControl.id) }); setSelectedId(undefined); }} /> : selectedBookmark ? <BookmarkSettings selected={selectedBookmark} pages={pages} rows={previewRows} updateSelected={updateBookmark} onDelete={() => deleteBookmark(selectedBookmark.id)} /> : <div className="empty-state compact">Select a visual, control, or report bookmark to configure it.</div>)}
+        {settingsTab === "format" && <div className="builder-format-stack"><ReportFormatSettings theme={theme} page={page} updateTheme={updateReportTheme} updateCanvas={updatePageCanvas} applyTheme={applyThemeToVisuals} />{selected ? <FormatSettings selected={selected} page={page} measures={measures} presets={formatPresets} updateSelected={updateSelected} updateDisplay={updateDisplay} updateInteraction={updateInteraction} updateVisualInteraction={updateVisualInteraction} savePreset={saveFormatPreset} deletePreset={deleteFormatPreset} /> : selectedControl ? <ControlFormatSettings selected={selectedControl} updateSelected={updateSelectedControl} /> : <p className="muted filter-empty">Select a visual or control for item formatting. Report and page styling remains available above.</p>}</div>}
+        {settingsTab === "filters" && <div className="builder-filter-scopes">{selected && <FilterEditor title="Filters on this visual" filters={selected.filters ?? []} fields={filterFields} onChange={(filters) => updateSelected({ filters })} />}<FilterEditor title="Filters on this page" filters={page?.filters ?? []} fields={filterFields} onChange={(filters) => page && updatePage({ ...page, filters })} /><FilterEditor title="Filters on all pages" filters={reportFilters} fields={filterFields} onChange={(filters) => { checkpoint(); setReportFilters(filters); }} /></div>}
+        {settingsTab === "selection" && page && <SelectionPane page={page} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setSelectedBookmarkId(undefined); }} onVisibility={updateItemVisibility} onMove={moveItem} />}
       </aside>
     </div>
   </>;
+}
+
+function builderCanvasStyle(page: ReportPage | undefined, theme: ReportThemeDefinition): CSSProperties {
+  const canvas = page?.canvas ?? {};
+  const wallpaper = canvas.wallpaperUrl?.trim();
+  return {
+    backgroundColor: canvas.backgroundColor ?? theme.canvasColor,
+    backgroundImage: wallpaper ? `url(${JSON.stringify(wallpaper)})` : undefined,
+    backgroundPosition: "center",
+    backgroundRepeat: canvas.wallpaperFit === "contain" ? "no-repeat" : undefined,
+    backgroundSize: canvas.wallpaperFit === "fill" ? "100% 100%" : canvas.wallpaperFit ?? "cover",
+    "--accent": theme.accentColor,
+    "--surface": theme.surfaceColor,
+    "--text": theme.textColor,
+    fontFamily: theme.fontFamily,
+  } as CSSProperties;
 }
 
 function BuildSettings({ selected, dimensions, measures, updateSelected, onDelete }: { selected: VisualDefinition; dimensions: Dataset["fields"]; measures: Dataset["fields"]; updateSelected: (changes: Partial<VisualDefinition>) => void; onDelete: () => void }) {
@@ -358,12 +538,30 @@ function ConditionalFormattingEditor({ selected, measures, updateSelected }: { s
   </div>;
 }
 
-function FormatSettings({ selected, page, measures, updateSelected, updateDisplay, updateInteraction, updateVisualInteraction }: { selected: VisualDefinition; page: ReportPage; measures: Dataset["fields"]; updateSelected: (changes: Partial<VisualDefinition>) => void; updateDisplay: (changes: NonNullable<VisualDefinition["display"]>) => void; updateInteraction: (changes: NonNullable<VisualDefinition["interaction"]>) => void; updateVisualInteraction: (sourceVisualId: string, targetVisualId: string, mode: VisualInteractionMode) => void }) {
+function ReportFormatSettings({ theme, page, updateTheme, updateCanvas, applyTheme }: { theme: ReportThemeDefinition; page: ReportPage; updateTheme: (changes: Partial<ReportThemeDefinition>) => void; updateCanvas: (changes: Partial<ReportPageCanvasOptions>) => void; applyTheme: () => void }) {
+  const canvas = page.canvas ?? {};
+  return <div className="form-stack report-format-settings">
+    <div className="panel-header"><div><h3>Report and page</h3><p>Theme, wallpaper, and layout grid</p></div></div>
+    <div className="settings-group"><strong>Report theme</strong><label>Theme name<input aria-label="Report theme name" value={theme.name} onChange={(event) => updateTheme({ name: event.target.value })} /></label><div className="theme-color-grid"><label>Accent<input aria-label="Report accent color" type="color" value={theme.accentColor} onChange={(event) => updateTheme({ accentColor: event.target.value })} /></label><label>Secondary<input aria-label="Report secondary color" type="color" value={theme.secondaryColor} onChange={(event) => updateTheme({ secondaryColor: event.target.value })} /></label><label>Surface<input aria-label="Report surface color" type="color" value={theme.surfaceColor} onChange={(event) => updateTheme({ surfaceColor: event.target.value })} /></label><label>Text<input aria-label="Report text color" type="color" value={theme.textColor} onChange={(event) => updateTheme({ textColor: event.target.value })} /></label></div><label>Font family<input aria-label="Report font family" value={theme.fontFamily ?? ""} onChange={(event) => updateTheme({ fontFamily: event.target.value })} /></label><button className="button" type="button" onClick={applyTheme}><Check size={13} /> Apply theme to this page</button></div>
+    <div className="settings-group"><strong>Page canvas</strong><label>Background<input aria-label="Page background color" type="color" value={canvas.backgroundColor ?? theme.canvasColor} onChange={(event) => updateCanvas({ backgroundColor: event.target.value })} /></label><label>Wallpaper URL<input aria-label="Page wallpaper URL" placeholder="https://… or data:image/…" value={canvas.wallpaperUrl ?? ""} onChange={(event) => updateCanvas({ wallpaperUrl: event.target.value })} /></label><label>Wallpaper fit<select aria-label="Page wallpaper fit" value={canvas.wallpaperFit ?? "cover"} onChange={(event) => updateCanvas({ wallpaperFit: event.target.value as NonNullable<ReportPageCanvasOptions["wallpaperFit"]> })}><option value="cover">Cover</option><option value="contain">Contain</option><option value="fill">Stretch</option></select></label><label className="toggle-row"><span>Show grid</span><input aria-label="Show page grid" type="checkbox" checked={canvas.showGrid !== false} onChange={(event) => updateCanvas({ showGrid: event.target.checked })} /></label><label className="toggle-row"><span>Snap to grid</span><input aria-label="Snap items to grid" type="checkbox" checked={canvas.snapToGrid !== false} onChange={(event) => updateCanvas({ snapToGrid: event.target.checked })} /></label><label>Snap interval<select aria-label="Page grid interval" value={canvas.gridSize ?? 1} onChange={(event) => updateCanvas({ gridSize: Number(event.target.value) as 1 | 2 | 3 })}><option value="1">Fine · 1 cell</option><option value="2">Medium · 2 cells</option><option value="3">Coarse · 3 cells</option></select></label></div>
+  </div>;
+}
+
+function SelectionPane({ page, selectedId, onSelect, onVisibility, onMove }: { page: ReportPage; selectedId?: string; onSelect: (id: string) => void; onVisibility: (id: string, hidden: boolean) => void; onMove: (id: string, direction: -1 | 1) => void }) {
+  const visuals = page.visuals.map((item, index) => ({ ...item, kind: "Visual", order: index, count: page.visuals.length }));
+  const controls = (page.controls ?? []).map((item, index, collection) => ({ ...item, kind: "Control", order: index, count: collection.length }));
+  const items = [...visuals, ...controls];
+  return <div className="form-stack"><div className="panel-header"><div><h3>Selection pane</h3><p>Visibility and canvas order</p></div></div><div className="selection-list">{items.map((item) => <div className={`selection-item ${item.id === selectedId ? "selected" : ""}`} key={item.id}><button className="selection-name" type="button" onClick={() => onSelect(item.id)}><span>{item.kind}</span><strong>{item.title}</strong></button><button className="icon-button" type="button" aria-label={`${item.hidden ? "Show" : "Hide"} ${item.title}`} aria-pressed={Boolean(item.hidden)} onClick={() => onVisibility(item.id, !item.hidden)}>{item.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button><button className="icon-button" type="button" aria-label={`Move ${item.title} earlier`} disabled={item.order === 0} onClick={() => onMove(item.id, -1)}><ChevronUp size={13} /></button><button className="icon-button" type="button" aria-label={`Move ${item.title} later`} disabled={item.order === item.count - 1} onClick={() => onMove(item.id, 1)}><ChevronDown size={13} /></button></div>)}</div>{!items.length && <div className="empty-state compact">This page has no report objects.</div>}</div>;
+}
+
+function FormatSettings({ selected, page, measures, presets, updateSelected, updateDisplay, updateInteraction, updateVisualInteraction, savePreset, deletePreset }: { selected: VisualDefinition; page: ReportPage; measures: Dataset["fields"]; presets: ReportFormatPreset[]; updateSelected: (changes: Partial<VisualDefinition>) => void; updateDisplay: (changes: NonNullable<VisualDefinition["display"]>) => void; updateInteraction: (changes: NonNullable<VisualDefinition["interaction"]>) => void; updateVisualInteraction: (sourceVisualId: string, targetVisualId: string, mode: VisualInteractionMode) => void; savePreset: (name: string) => void; deletePreset: (id: string) => void }) {
   const display = selected.display ?? {};
   const interaction = selected.interaction ?? {};
   const targets = page.visuals.filter((visual) => visual.id !== selected.id);
+  const [presetName, setPresetName] = useState("");
   return <div className="form-stack">
     <div className="panel-header"><div><h3>Format visual</h3><p>Appearance and behavior</p></div></div>
+    <div className="settings-group"><strong>Format presets</strong><div className="preset-create-row"><input aria-label="New format preset name" placeholder="Preset name" value={presetName} onChange={(event) => setPresetName(event.target.value)} /><button className="icon-button" type="button" aria-label="Save preset" disabled={!presetName.trim()} onClick={() => { savePreset(presetName); setPresetName(""); }}><Save size={13} /></button></div><div className="preset-list">{presets.map((preset) => <div key={preset.id}><button type="button" aria-label={`Apply preset ${preset.name}`} onClick={() => updateSelected({ display: structuredClone(preset.display) })}>{preset.name}</button><button className="icon-button danger" type="button" aria-label={`Delete preset ${preset.name}`} onClick={() => deletePreset(preset.id)}><Trash2 size={11} /></button></div>)}</div>{!presets.length && <p className="muted filter-empty">Save the current appearance to reuse it on another visual.</p>}</div>
     <div className="settings-group"><strong>Title and style</strong><label className="toggle-row"><span>Show title</span><input type="checkbox" checked={display.showTitle !== false} onChange={(event) => updateDisplay({ showTitle: event.target.checked })} /></label><label>Title alignment<select value={display.titleAlignment ?? "left"} onChange={(event) => updateDisplay({ titleAlignment: event.target.value as "left" | "center" | "right" })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label><label>Accent color<input type="color" value={display.accentColor ?? "#5c73e6"} onChange={(event) => updateDisplay({ accentColor: event.target.value })} /></label><label>Background<input type="color" value={display.backgroundColor ?? "#ffffff"} onChange={(event) => updateDisplay({ backgroundColor: event.target.value })} /></label><label>Corner radius<input type="range" min="0" max="24" value={display.borderRadius ?? 10} onChange={(event) => updateDisplay({ borderRadius: Number(event.target.value) })} /></label></div>
     <div className="settings-group"><strong>Chart elements</strong><label className="toggle-row"><span>Legend</span><input type="checkbox" checked={display.showLegend ?? false} onChange={(event) => updateDisplay({ showLegend: event.target.checked })} /></label><label className="toggle-row"><span>Data labels</span><input type="checkbox" checked={display.showDataLabels ?? false} onChange={(event) => updateDisplay({ showDataLabels: event.target.checked })} /></label><label className="toggle-row"><span>Gridlines</span><input type="checkbox" checked={display.showGridlines !== false} onChange={(event) => updateDisplay({ showGridlines: event.target.checked })} /></label></div>
     <ConditionalFormattingEditor selected={selected} measures={measures} updateSelected={updateSelected} />

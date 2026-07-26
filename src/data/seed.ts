@@ -177,6 +177,18 @@ export const seedReports: Report[] = reportNames.map(([name, slug, description],
   description,
   status: "published",
   minimumRole: minimumRoles[index],
+  theme: {
+    name: index === 0 ? "Digital Verse" : "Operations blue",
+    accentColor: "#5c73e6",
+    secondaryColor: "#2fb3c2",
+    canvasColor: "#eef2f8",
+    surfaceColor: "#ffffff",
+    textColor: "#172033",
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+  },
+  formatPresets: [
+    { id: `preset-${index + 1}-executive`, name: "Executive card", display: { showTitle: true, showLegend: false, showDataLabels: true, showGridlines: false, backgroundColor: "#ffffff", accentColor: "#5c73e6", borderRadius: 12, titleAlignment: "left" } },
+  ],
   filters: [
     { id: `filter-${index + 1}-recent-report`, field: "RecordDate", operator: "greaterThanOrEqual", value: "", mode: "relativeDate", relativeDate: { direction: "last", amount: 30, unit: "days", includeToday: true }, locked: true },
     { id: `filter-${index + 1}-business-unit`, field: "BusinessUnit", operator: "equals", value: "", mode: "advanced", logicalOperator: "or", clauses: [{ operator: "equals", value: "Production" }, { operator: "equals", value: "Assembly" }], hidden: true, locked: true },
@@ -186,7 +198,7 @@ export const seedReports: Report[] = reportNames.map(([name, slug, description],
     { id: `bookmark-${index + 1}-line-a`, name: "Line A focus", pageId: `page-${index + 1}-overview`, filters: { Line: "Line A" } },
   ],
   pages: [
-    { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, filters: [{ id: `filter-${index + 1}-top-model-context`, field: "Model", operator: "equals", value: "", mode: "topN", topN: { direction: "top", count: 2, byMeasure: "ActualQty", aggregation: "sum" } }], visuals: baseVisuals(index + 1), interactions: baseInteractions(index + 1, true), controls: [
+    { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, canvas: { backgroundColor: "#eef2f8", showGrid: true, snapToGrid: true, gridSize: 1 }, filters: [{ id: `filter-${index + 1}-top-model-context`, field: "Model", operator: "equals", value: "", mode: "topN", topN: { direction: "top", count: 2, byMeasure: "ActualQty", aggregation: "sum" } }], visuals: baseVisuals(index + 1), interactions: baseInteractions(index + 1, true), controls: [
       { id: `control-${index + 1}-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 15, w: 6, h: 1 },
       { id: `control-${index + 1}-bookmarks`, type: "bookmarkNavigator", title: "Saved views", x: 6, y: 15, w: 6, h: 1 },
       { id: `control-${index + 1}-detail`, type: "button", title: "Open detail", x: 0, y: 16, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-detail` } },

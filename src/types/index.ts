@@ -189,6 +189,31 @@ export interface VisualDisplayOptions {
   titleAlignment?: "left" | "center" | "right";
 }
 
+export interface ReportThemeDefinition {
+  name: string;
+  accentColor: string;
+  secondaryColor: string;
+  canvasColor: string;
+  surfaceColor: string;
+  textColor: string;
+  fontFamily?: string;
+}
+
+export interface ReportFormatPreset {
+  id: string;
+  name: string;
+  display: VisualDisplayOptions;
+}
+
+export interface ReportPageCanvasOptions {
+  backgroundColor?: string;
+  wallpaperUrl?: string;
+  wallpaperFit?: "cover" | "contain" | "fill";
+  showGrid?: boolean;
+  snapToGrid?: boolean;
+  gridSize?: 1 | 2 | 3;
+}
+
 export interface VisualInteractionOptions {
   crossFilter?: boolean;
   tooltips?: boolean;
@@ -218,6 +243,7 @@ export interface VisualDefinition {
   filters?: ReportFilterDefinition[];
   sort?: VisualSortDefinition;
   conditionalFormatting?: VisualConditionalFormatting;
+  hidden?: boolean;
 }
 
 export interface DrillthroughDefinition {
@@ -274,6 +300,7 @@ export interface ReportControlDefinition {
   h: number;
   action?: ReportActionDefinition;
   display?: ReportControlDisplayOptions;
+  hidden?: boolean;
 }
 
 export interface ReportPage {
@@ -286,6 +313,7 @@ export interface ReportPage {
   visuals: VisualDefinition[];
   controls?: ReportControlDefinition[];
   interactions?: VisualInteractionDefinition[];
+  canvas?: ReportPageCanvasOptions;
 }
 
 export interface Report {
@@ -298,6 +326,8 @@ export interface Report {
   minimumRole: RoleCode;
   filters?: ReportFilterDefinition[];
   bookmarks?: ReportBookmarkDefinition[];
+  theme?: ReportThemeDefinition;
+  formatPresets?: ReportFormatPreset[];
   pages: ReportPage[];
 }
 
