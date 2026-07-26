@@ -4,7 +4,7 @@ import { memo, useCallback, useMemo, useState, type CSSProperties, type MouseEve
 import { ChevronUp, ChevronsDown, CornerUpRight, GitBranch, Maximize2, TableProperties } from "lucide-react";
 import { EChart } from "./echart";
 import { ProductionMatrix, ProductionTable } from "./data-table";
-import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, visualHierarchy, type VisualDrillSelection } from "@/lib/reporting";
+import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, sortVisualRows, visualHierarchy, type VisualDrillSelection } from "@/lib/reporting";
 import type { ManufacturingRecord, VisualDefinition } from "@/types";
 
 const numberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -37,9 +37,9 @@ export const ReportVisual = memo(function ReportVisual({ visual, rows, highlight
   const drillField = hierarchy[level] ?? visual.dimension;
   const supportsDrill = Boolean(drillField && visual.measure && hierarchy.length > 1 && !["gauge", "scatter", "slicer"].includes(visual.type));
   const canAdvance = supportsDrill && level < hierarchy.length - 1;
-  const scopedRows = useMemo(() => applyReportFilters(rows, visual.filters), [rows, visual.filters]);
+  const scopedRows = useMemo(() => sortVisualRows(visual, applyReportFilters(rows, visual.filters)), [rows, visual]);
   const drilledRows = useMemo(() => applyVisualDrillPath(scopedRows, drill.path), [drill.path, scopedRows]);
-  const scopedHighlightRows = useMemo(() => highlightRows ? applyReportFilters(highlightRows, visual.filters) : undefined, [highlightRows, visual.filters]);
+  const scopedHighlightRows = useMemo(() => highlightRows ? sortVisualRows(visual, applyReportFilters(highlightRows, visual.filters)) : undefined, [highlightRows, visual]);
   const drilledHighlightRows = useMemo(() => scopedHighlightRows ? applyVisualDrillPath(scopedHighlightRows, drill.path) : undefined, [drill.path, scopedHighlightRows]);
   const renderedVisual = useMemo(() => drillField ? { ...visual, dimension: drillField } : visual, [drillField, visual]);
   const actionVisual = useMemo<VisualDefinition>(() => ({

@@ -106,13 +106,58 @@ export type VisualType =
   | "matrix"
   | "slicer";
 
-export type ReportFilterOperator = "equals" | "notEquals" | "contains" | "greaterThanOrEqual" | "lessThanOrEqual";
+export type ReportFilterOperator =
+  | "equals"
+  | "notEquals"
+  | "contains"
+  | "notContains"
+  | "startsWith"
+  | "endsWith"
+  | "greaterThan"
+  | "greaterThanOrEqual"
+  | "lessThan"
+  | "lessThanOrEqual"
+  | "isBlank"
+  | "isNotBlank";
+
+export type ReportFilterMode = "basic" | "advanced" | "topN" | "relativeDate";
+
+export interface ReportFilterClause {
+  operator: ReportFilterOperator;
+  value?: string | number;
+}
+
+export interface ReportTopNDefinition {
+  direction: "top" | "bottom";
+  count: number;
+  byMeasure: keyof ManufacturingRecord;
+  aggregation?: Aggregation;
+}
+
+export interface ReportRelativeDateDefinition {
+  direction: "last" | "next" | "current";
+  amount: number;
+  unit: "days" | "weeks" | "months" | "years";
+  includeToday?: boolean;
+}
 
 export interface ReportFilterDefinition {
   id: string;
   field: keyof ManufacturingRecord;
   operator: ReportFilterOperator;
   value: string | number;
+  mode?: ReportFilterMode;
+  clauses?: ReportFilterClause[];
+  logicalOperator?: "and" | "or";
+  topN?: ReportTopNDefinition;
+  relativeDate?: ReportRelativeDateDefinition;
+  locked?: boolean;
+  hidden?: boolean;
+}
+
+export interface VisualSortDefinition {
+  field: keyof ManufacturingRecord;
+  direction: "asc" | "desc";
 }
 
 export interface VisualDisplayOptions {
@@ -148,6 +193,7 @@ export interface VisualDefinition {
   display?: VisualDisplayOptions;
   interaction?: VisualInteractionOptions;
   filters?: ReportFilterDefinition[];
+  sort?: VisualSortDefinition;
 }
 
 export interface DrillthroughDefinition {

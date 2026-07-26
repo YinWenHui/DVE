@@ -14,7 +14,7 @@ Hosting, production security hardening, service packaging, centralized monitorin
 | --- | --- |
 | Report consumption | Multi-page reports, responsive canvas, application navigation, freshness context, theme/fullscreen, loading skeletons, and actionable empty/no-result/stale/offline/error states |
 | Visual catalog | KPI, bar, column, stacked bar/column, line, area, combo, scatter, doughnut, treemap, funnel, waterfall, gauge, table, matrix, slicer |
-| Filtering | Viewer filters plus persisted report-, page-, and visual-level filters |
+| Filtering | Viewer filters plus persisted report-, page-, and visual-level basic/advanced filters, AND/OR clauses, Top/Bottom N, rolling/current relative dates, locked and hidden constraints, and authored visual sort order |
 | Interactions | Persisted source-to-target filter/highlight/none editing, hierarchy drill down/up/expand controls, hidden drillthrough targets with carried filter context/back navigation, authored page/bookmark/back/reset buttons, page and bookmark navigators, slicers, tooltips, reset/clear, focus mode, show underlying data |
 | Personalization | Persisted report-owned bookmarks with page/filter state plus browser-local personal bookmarks |
 | Authoring | Live visual previews, draggable/resizable grid, data field wells, secondary measures, aggregation and number format |
@@ -26,7 +26,6 @@ Hosting, production security hardening, service packaging, centralized monitorin
 
 ### Front-end phase B — report behavior
 
-- Sort, Top N, relative date, advanced filter clauses, filter locking, and hidden filters.
 - Conditional formatting for tables, matrices, and chart data colors.
 
 ### Front-end phase C — authoring depth

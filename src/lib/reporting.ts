@@ -94,22 +94,104 @@ export function aggregateRows(
   return values.reduce((sum, value) => sum + value, 0);
 }
 
-function matchesFilter(row: ManufacturingRecord, filter: ReportFilterDefinition): boolean {
-  const actual = row[filter.field];
+function matchesClause(actual: ManufacturingRecord[keyof ManufacturingRecord], operator: ReportFilterDefinition["operator"], value: string | number | undefined): boolean {
   const actualText = String(actual ?? "").toLocaleLowerCase();
-  const expectedText = String(filter.value).toLocaleLowerCase();
+  const expectedText = String(value ?? "").toLocaleLowerCase();
   const actualNumber = Number(actual);
-  const expectedNumber = Number(filter.value);
-  if (filter.operator === "notEquals") return actualText !== expectedText;
-  if (filter.operator === "contains") return actualText.includes(expectedText);
-  if (filter.operator === "greaterThanOrEqual") return Number.isFinite(actualNumber) && Number.isFinite(expectedNumber) ? actualNumber >= expectedNumber : actualText >= expectedText;
-  if (filter.operator === "lessThanOrEqual") return Number.isFinite(actualNumber) && Number.isFinite(expectedNumber) ? actualNumber <= expectedNumber : actualText <= expectedText;
+  const expectedNumber = Number(value);
+  if (operator === "isBlank") return actual === null || actual === undefined || actualText.trim() === "";
+  if (operator === "isNotBlank") return actual !== null && actual !== undefined && actualText.trim() !== "";
+  if (operator === "notEquals") return actualText !== expectedText;
+  if (operator === "contains") return actualText.includes(expectedText);
+  if (operator === "notContains") return !actualText.includes(expectedText);
+  if (operator === "startsWith") return actualText.startsWith(expectedText);
+  if (operator === "endsWith") return actualText.endsWith(expectedText);
+  if (operator === "greaterThan") return Number.isFinite(actualNumber) && Number.isFinite(expectedNumber) ? actualNumber > expectedNumber : actualText > expectedText;
+  if (operator === "greaterThanOrEqual") return Number.isFinite(actualNumber) && Number.isFinite(expectedNumber) ? actualNumber >= expectedNumber : actualText >= expectedText;
+  if (operator === "lessThan") return Number.isFinite(actualNumber) && Number.isFinite(expectedNumber) ? actualNumber < expectedNumber : actualText < expectedText;
+  if (operator === "lessThanOrEqual") return Number.isFinite(actualNumber) && Number.isFinite(expectedNumber) ? actualNumber <= expectedNumber : actualText <= expectedText;
   return actualText === expectedText;
 }
 
-export function applyReportFilters(rows: ManufacturingRecord[], filters: ReportFilterDefinition[] = []): ManufacturingRecord[] {
+function addUtcDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function addUtcRelative(date: Date, amount: number, unit: NonNullable<ReportFilterDefinition["relativeDate"]>["unit"]): Date {
+  const next = new Date(date);
+  if (unit === "days") next.setUTCDate(next.getUTCDate() + amount);
+  else if (unit === "weeks") next.setUTCDate(next.getUTCDate() + amount * 7);
+  else if (unit === "months") next.setUTCMonth(next.getUTCMonth() + amount);
+  else next.setUTCFullYear(next.getUTCFullYear() + amount);
+  return next;
+}
+
+function currentPeriod(date: Date, unit: NonNullable<ReportFilterDefinition["relativeDate"]>["unit"]): [Date, Date] {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
+  if (unit === "days") return [new Date(Date.UTC(year, month, day)), new Date(Date.UTC(year, month, day))];
+  if (unit === "weeks") {
+    const today = new Date(Date.UTC(year, month, day));
+    const mondayOffset = (today.getUTCDay() + 6) % 7;
+    const start = addUtcDays(today, -mondayOffset);
+    return [start, addUtcDays(start, 6)];
+  }
+  if (unit === "months") return [new Date(Date.UTC(year, month, 1)), new Date(Date.UTC(year, month + 1, 0))];
+  return [new Date(Date.UTC(year, 0, 1)), new Date(Date.UTC(year, 11, 31))];
+}
+
+function matchesRelativeDate(actual: ManufacturingRecord[keyof ManufacturingRecord], filter: ReportFilterDefinition, now: Date): boolean {
+  const definition = filter.relativeDate;
+  if (!definition) return true;
+  const value = new Date(`${String(actual).slice(0, 10)}T00:00:00.000Z`);
+  if (Number.isNaN(value.getTime())) return false;
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  let start: Date;
+  let end: Date;
+  if (definition.direction === "current") [start, end] = currentPeriod(today, definition.unit);
+  else if (definition.direction === "last") {
+    end = definition.includeToday === false ? addUtcDays(today, -1) : today;
+    start = addUtcDays(addUtcRelative(end, -Math.max(1, definition.amount), definition.unit), 1);
+  } else {
+    start = definition.includeToday === false ? addUtcDays(today, 1) : today;
+    end = addUtcDays(addUtcRelative(start, Math.max(1, definition.amount), definition.unit), -1);
+  }
+  return value >= start && value <= end;
+}
+
+function matchesFilter(row: ManufacturingRecord, filter: ReportFilterDefinition, now: Date): boolean {
+  const actual = row[filter.field];
+  if (filter.mode === "relativeDate") return matchesRelativeDate(actual, filter, now);
+  if (filter.mode === "advanced" && filter.clauses?.length) {
+    const matches = filter.clauses.map((clause) => matchesClause(actual, clause.operator, clause.value));
+    return filter.logicalOperator === "or" ? matches.some(Boolean) : matches.every(Boolean);
+  }
+  return matchesClause(actual, filter.operator, filter.value);
+}
+
+function applyTopNFilter(rows: ManufacturingRecord[], filter: ReportFilterDefinition): ManufacturingRecord[] {
+  const definition = filter.topN;
+  if (!definition) return rows;
+  const groups = new Map<string, ManufacturingRecord[]>();
+  rows.forEach((row) => {
+    const key = String(row[filter.field] ?? "");
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  });
+  const ranked = [...groups.entries()].map(([key, groupRows]) => ({ key, value: aggregateRows(groupRows, definition.byMeasure, definition.aggregation ?? "sum") }));
+  ranked.sort((left, right) => (definition.direction === "top" ? right.value - left.value : left.value - right.value) || left.key.localeCompare(right.key));
+  const allowed = new Set(ranked.slice(0, Math.max(1, Math.min(1_000, Math.floor(definition.count)))).map((item) => item.key));
+  return rows.filter((row) => allowed.has(String(row[filter.field] ?? "")));
+}
+
+export function applyReportFilters(rows: ManufacturingRecord[], filters: ReportFilterDefinition[] = [], now = new Date()): ManufacturingRecord[] {
   if (!filters.length) return rows;
-  return rows.filter((row) => filters.every((filter) => matchesFilter(row, filter)));
+  const regularFilters = filters.filter((filter) => filter.mode !== "topN");
+  let result = rows.filter((row) => regularFilters.every((filter) => matchesFilter(row, filter, now)));
+  filters.filter((filter) => filter.mode === "topN").forEach((filter) => { result = applyTopNFilter(result, filter); });
+  return result;
 }
 
 function groupedValues(visual: VisualDefinition, rows: ManufacturingRecord[], measure = visual.measure) {
@@ -119,11 +201,33 @@ function groupedValues(visual: VisualDefinition, rows: ManufacturingRecord[], me
     const key = String(row[visual.dimension as keyof ManufacturingRecord] ?? "Blank");
     grouped.set(key, [...(grouped.get(key) ?? []), row]);
   });
-  const categories = [...grouped.keys()].sort();
+  const categories = [...grouped.keys()];
+  categories.sort((left, right) => {
+    if (!visual.sort) return left.localeCompare(right);
+    const leftRows = grouped.get(left) ?? [];
+    const rightRows = grouped.get(right) ?? [];
+    const leftValue = visual.sort.field === visual.dimension ? left : aggregateRows(leftRows, visual.sort.field, visual.aggregation);
+    const rightValue = visual.sort.field === visual.dimension ? right : aggregateRows(rightRows, visual.sort.field, visual.aggregation);
+    const comparison = typeof leftValue === "number" && typeof rightValue === "number" ? leftValue - rightValue : String(leftValue).localeCompare(String(rightValue));
+    return visual.sort.direction === "asc" ? comparison : -comparison;
+  });
   return {
     categories,
     values: categories.map((category) => aggregateRows(grouped.get(category) ?? [], measure, visual.aggregation)),
   };
+}
+
+export function sortVisualRows(visual: VisualDefinition, rows: ManufacturingRecord[]): ManufacturingRecord[] {
+  if (!visual.sort) return rows;
+  const direction = visual.sort.direction === "asc" ? 1 : -1;
+  return [...rows].sort((left, right) => {
+    const leftValue = left[visual.sort!.field];
+    const rightValue = right[visual.sort!.field];
+    const leftNumber = Number(leftValue);
+    const rightNumber = Number(rightValue);
+    const comparison = Number.isFinite(leftNumber) && Number.isFinite(rightNumber) ? leftNumber - rightNumber : String(leftValue ?? "").localeCompare(String(rightValue ?? ""));
+    return comparison * direction;
+  });
 }
 
 export function visualData(visual: VisualDefinition, rows: ManufacturingRecord[]): { columns: string[]; rows: Array<Array<string | number>> } {
@@ -237,7 +341,7 @@ export function chartOption(visual: VisualDefinition, inputRows: ManufacturingRe
   };
 
   const horizontal = visual.type === "bar" || visual.type === "stackedBar";
-  const categoryAxis = { type: "category" as const, data: primary.categories, axisLabel: { hideOverlap: true } };
+  const categoryAxis = { type: "category" as const, data: primary.categories, axisLabel: { hideOverlap: true }, ...(horizontal ? { inverse: true } : {}) };
   const valueAxis = { type: "value" as const, splitLine: { show: visual.display?.showGridlines !== false } };
   const common = {
     tooltip: { show: tooltips, trigger: "axis" as const },

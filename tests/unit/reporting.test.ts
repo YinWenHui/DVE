@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSyntheticRecords, seedReports } from "@/data/seed";
-import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, drillthroughTargets, resolveReportCanvasState, resolveVisualInteractionRows, visualData, visualHierarchy, visualInteractionMode } from "@/lib/reporting";
+import { aggregateRows, applyReportFilters, applyVisualDrillPath, chartOption, drillthroughTargets, resolveReportCanvasState, resolveVisualInteractionRows, sortVisualRows, visualData, visualHierarchy, visualInteractionMode } from "@/lib/reporting";
 import type { ReportPage, VisualDefinition } from "@/types";
 
 describe("report visual metadata", () => {
@@ -10,6 +10,34 @@ describe("report visual metadata", () => {
     const lineA = applyReportFilters(rows, [{ id: "line-a", field: "Line", operator: "equals", value: "Line A" }]);
     expect(lineA).toHaveLength(4);
     expect(aggregateRows(lineA, "ActualQty", "sum")).toBeGreaterThan(0);
+  });
+
+  it("executes advanced AND and OR clauses", () => {
+    const production = applyReportFilters(rows, [{ id: "production", field: "BusinessUnit", operator: "equals", value: "", mode: "advanced", logicalOperator: "and", clauses: [{ operator: "equals", value: "Production" }, { operator: "isNotBlank" }] }]);
+    expect(new Set(production.map((row) => row.Line))).toEqual(new Set(["Line A", "Line B"]));
+    const allUnits = applyReportFilters(rows, [{ id: "units", field: "BusinessUnit", operator: "equals", value: "", mode: "advanced", logicalOperator: "or", clauses: [{ operator: "equals", value: "Production" }, { operator: "equals", value: "Assembly" }], locked: true, hidden: true }]);
+    expect(allUnits).toHaveLength(rows.length);
+  });
+
+  it("applies relative-date windows from a stable reference date", () => {
+    const datedRows = createSyntheticRecords(10);
+    const latestDate = [...datedRows].map((row) => row.RecordDate).sort().at(-1)!;
+    const recent = applyReportFilters(datedRows, [{ id: "recent", field: "RecordDate", operator: "greaterThanOrEqual", value: "", mode: "relativeDate", relativeDate: { direction: "last", amount: 3, unit: "days", includeToday: true } }], new Date(`${latestDate}T12:00:00.000Z`));
+    expect(new Set(recent.map((row) => row.RecordDate)).size).toBe(3);
+    expect(recent.every((row) => row.RecordDate <= latestDate)).toBe(true);
+  });
+
+  it("ranks Top and Bottom N categories by an aggregated measure", () => {
+    const topLine = applyReportFilters(rows, [{ id: "top-line", field: "Line", operator: "equals", value: "", mode: "topN", topN: { direction: "top", count: 1, byMeasure: "ActualQty", aggregation: "sum" } }]);
+    const bottomLine = applyReportFilters(rows, [{ id: "bottom-line", field: "Line", operator: "equals", value: "", mode: "topN", topN: { direction: "bottom", count: 1, byMeasure: "ActualQty", aggregation: "sum" } }]);
+    expect(new Set(topLine.map((row) => row.Line))).toEqual(new Set(["Line C"]));
+    expect(new Set(bottomLine.map((row) => row.Line))).toEqual(new Set(["Line A"]));
+  });
+
+  it("sorts grouped charts and table rows with authored visual metadata", () => {
+    const visual: VisualDefinition = { id: "sorted", type: "bar", title: "Actual by line", x: 0, y: 0, w: 6, h: 5, dimension: "Line", measure: "ActualQty", aggregation: "sum", sort: { field: "ActualQty", direction: "desc" } };
+    expect(visualData(visual, rows).rows.map((row) => row[0])).toEqual(["Line C", "Line B", "Line A"]);
+    expect(sortVisualRows({ ...visual, sort: { field: "Line", direction: "desc" } }, rows).at(0)?.Line).toBe("Line C");
   });
 
   it("creates grouped show-data rows with a secondary measure", () => {

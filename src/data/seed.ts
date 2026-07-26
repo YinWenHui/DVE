@@ -124,9 +124,9 @@ const baseVisuals = (variant: number): VisualDefinition[] => [
   { id: `v-${variant}-achievement`, type: "kpi", title: "Achievement", x: 6, y: 0, w: 2, h: 2, measure: "AchievementRate", aggregation: "average", format: "percent" },
   { id: `v-${variant}-yield`, type: "kpi", title: "Yield", x: 8, y: 0, w: 2, h: 2, measure: "YieldRate", aggregation: "average", format: "percent" },
   { id: `v-${variant}-pending`, type: "kpi", title: "Pending", x: 10, y: 0, w: 2, h: 2, measure: "PendingQty", aggregation: "sum", format: "number" },
-  { id: `v-${variant}-bar`, type: "bar", title: "Actual by Line", x: 0, y: 2, w: 6, h: 5, dimension: "Line", hierarchy: ["Line", "Model", "Shift"], measure: "ActualQty", aggregation: "sum" },
-  { id: `v-${variant}-line`, type: variant % 2 === 0 ? "area" : "line", title: "Output Trend", x: 6, y: 2, w: 6, h: 5, dimension: "RecordDate", measure: "ActualQty", aggregation: "sum" },
-  { id: `v-${variant}-donut`, type: "doughnut", title: "Output by Model", x: 0, y: 7, w: 4, h: 5, dimension: "Model", measure: "ActualQty", aggregation: "sum" },
+  { id: `v-${variant}-bar`, type: "bar", title: "Actual by Line", x: 0, y: 2, w: 6, h: 5, dimension: "Line", hierarchy: ["Line", "Model", "Shift"], measure: "ActualQty", aggregation: "sum", sort: { field: "ActualQty", direction: "desc" } },
+  { id: `v-${variant}-line`, type: variant % 2 === 0 ? "area" : "line", title: "Output Trend", x: 6, y: 2, w: 6, h: 5, dimension: "RecordDate", measure: "ActualQty", aggregation: "sum", filters: [{ id: `filter-${variant}-recent-trend`, field: "RecordDate", operator: "greaterThanOrEqual", value: "", mode: "relativeDate", relativeDate: { direction: "last", amount: 7, unit: "days", includeToday: true }, locked: true }] },
+  { id: `v-${variant}-donut`, type: "doughnut", title: "Output by Model", x: 0, y: 7, w: 4, h: 5, dimension: "Model", measure: "ActualQty", aggregation: "sum", filters: [{ id: `filter-${variant}-top-models`, field: "Model", operator: "equals", value: "", mode: "topN", topN: { direction: "top", count: 2, byMeasure: "ActualQty", aggregation: "sum" } }] },
   { id: `v-${variant}-matrix`, type: variant % 3 === 0 ? "matrix" : "table", title: variant % 3 === 0 ? "Line / Model Matrix" : "Production Detail", x: 4, y: 7, w: 8, h: 5 },
   { id: `v-${variant}-slicer`, type: "slicer", title: "Line slicer", x: 0, y: 12, w: 4, h: 3, dimension: "Line" },
 ];
@@ -164,17 +164,21 @@ export const seedReports: Report[] = reportNames.map(([name, slug, description],
   description,
   status: "published",
   minimumRole: minimumRoles[index],
+  filters: [
+    { id: `filter-${index + 1}-recent-report`, field: "RecordDate", operator: "greaterThanOrEqual", value: "", mode: "relativeDate", relativeDate: { direction: "last", amount: 30, unit: "days", includeToday: true }, locked: true },
+    { id: `filter-${index + 1}-business-unit`, field: "BusinessUnit", operator: "equals", value: "", mode: "advanced", logicalOperator: "or", clauses: [{ operator: "equals", value: "Production" }, { operator: "equals", value: "Assembly" }], hidden: true, locked: true },
+  ],
   bookmarks: [
     { id: `bookmark-${index + 1}-overview`, name: "Overview", pageId: `page-${index + 1}-overview`, filters: {} },
     { id: `bookmark-${index + 1}-line-a`, name: "Line A focus", pageId: `page-${index + 1}-overview`, filters: { Line: "Line A" } },
   ],
   pages: [
-    { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, visuals: baseVisuals(index + 1), interactions: baseInteractions(index + 1, true), controls: [
+    { id: `page-${index + 1}-overview`, name: "Overview", ordinal: 0, filters: [{ id: `filter-${index + 1}-top-model-context`, field: "Model", operator: "equals", value: "", mode: "topN", topN: { direction: "top", count: 2, byMeasure: "ActualQty", aggregation: "sum" } }], visuals: baseVisuals(index + 1), interactions: baseInteractions(index + 1, true), controls: [
       { id: `control-${index + 1}-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 15, w: 6, h: 1 },
       { id: `control-${index + 1}-bookmarks`, type: "bookmarkNavigator", title: "Saved views", x: 6, y: 15, w: 6, h: 1 },
       { id: `control-${index + 1}-detail`, type: "button", title: "Open detail", x: 0, y: 16, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-detail` } },
     ] },
-    { id: `page-${index + 1}-detail`, name: "Detail", ordinal: 1, visuals: baseVisuals(index + 11).slice(6), interactions: baseInteractions(index + 11, false), controls: [
+    { id: `page-${index + 1}-detail`, name: "Detail", ordinal: 1, filters: [{ id: `filter-${index + 1}-valid-customer`, field: "Customer", operator: "contains", value: "Customer", mode: "advanced", clauses: [{ operator: "contains", value: "Customer" }, { operator: "isNotBlank" }], logicalOperator: "and", locked: true }], visuals: baseVisuals(index + 11).slice(6), interactions: baseInteractions(index + 11, false), controls: [
       { id: `control-${index + 1}-detail-pages`, type: "pageNavigator", title: "Page navigator", x: 0, y: 15, w: 6, h: 1 },
       { id: `control-${index + 1}-overview`, type: "button", title: "Back to overview", x: 6, y: 15, w: 3, h: 1, action: { type: "page", targetId: `page-${index + 1}-overview` } },
     ] },

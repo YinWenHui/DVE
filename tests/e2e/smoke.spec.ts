@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("mock administrator opens the seeded application and uses report controls", async ({ page }) => {
+  test.setTimeout(120_000);
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error") browserErrors.push(message.text()); });
@@ -27,7 +28,12 @@ test("mock administrator opens the seeded application and uses report controls",
   const filterLatency = await page.getByRole("button", { name: "Filters", exact: true }).evaluate(async (button) => { const started = performance.now(); (button as HTMLButtonElement).click(); await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); return performance.now() - started; });
   expect(filterLatency).toBeLessThan(1_000);
   const filtersPane = page.getByLabel("Report filters");
-  await expect(filtersPane).toBeVisible(); await filtersPane.getByLabel("Line").selectOption("Line A");
+  await expect(filtersPane).toBeVisible();
+  const lockedReportFilter = filtersPane.locator('[data-filter-id="filter-1-recent-report"]'); await expect(lockedReportFilter).toContainText("Locked"); await expect(lockedReportFilter).toContainText("Last 30 days");
+  await expect(filtersPane.locator('[data-filter-id="filter-1-business-unit"]')).toHaveCount(0);
+  const topModelFilter = filtersPane.locator('[data-filter-id="filter-1-top-model-context"]'); await expect(topModelFilter.getByLabel("Top N count for Model")).toHaveValue("2");
+  const rowsInContext = page.locator(".source-strip span", { hasText: "Rows in context" }).locator("strong"); const rowsBeforeTopN = await rowsInContext.textContent(); const setTopN = async (value: string) => topModelFilter.getByLabel("Top N count for Model").evaluate((element, nextValue) => { const input = element as HTMLInputElement; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(input, nextValue); input.dispatchEvent(new Event("input", { bubbles: true })); }, value); await setTopN("1"); await expect(rowsInContext).not.toHaveText(rowsBeforeTopN ?? ""); await setTopN("2"); await expect(topModelFilter.getByLabel("Top N count for Model")).toHaveValue("2");
+  await filtersPane.getByLabel("Line").selectOption("Line A");
   await expect(page.getByText("Line A", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Bookmarks", exact: true }).dispatchEvent("click");
   const bookmarksPane = page.getByLabel("Personal bookmarks");
@@ -55,12 +61,16 @@ test("mock administrator opens the seeded application and uses report controls",
   await page.getByRole("button", { name: "Move Open detail" }).dispatchEvent("click"); await page.getByRole("button", { name: "Build" }).dispatchEvent("click"); await expect(page.getByLabel("Control type")).toHaveValue("button"); await expect(page.getByLabel("Button action")).toHaveValue("page"); await expect(page.getByLabel("Button target page")).toHaveValue("page-1-detail");
   await page.getByRole("button", { name: "Add Bookmark navigator" }).click(); await expect(page.getByLabel("Control type")).toHaveValue("bookmarkNavigator"); await page.getByLabel("Control title").fill("Quick views"); await page.getByRole("button", { name: "Line A focus", exact: true }).click(); await expect(page.getByLabel("Report bookmark name")).toHaveValue("Line A focus"); await expect(page.getByLabel("Report bookmark Line", { exact: true })).toHaveValue("Line A");
   await page.getByRole("button", { name: "Move Actual by Line" }).dispatchEvent("click"); await page.getByRole("button", { name: "Build" }).dispatchEvent("click");
-  await expect(page.getByLabel("Drill level 2")).toHaveValue("Model"); await expect(page.getByLabel("Drill level 3")).toHaveValue("Shift");
+  await expect(page.getByLabel("Drill level 2")).toHaveValue("Model"); await expect(page.getByLabel("Drill level 3")).toHaveValue("Shift"); await expect(page.getByLabel("Sort visual by")).toHaveValue("ActualQty"); await expect(page.getByLabel("Sort visual direction")).toHaveValue("desc");
+  await page.getByRole("button", { name: "Filters", exact: true }).dispatchEvent("click");
+  const builderTopN = page.locator('[data-filter-id="filter-1-top-model-context"]'); await expect(builderTopN.getByLabel("Filter type")).toHaveValue("topN"); await expect(builderTopN.getByLabel("Top N count")).toHaveValue("2"); await builderTopN.getByLabel("Top N count").evaluate((element) => { const input = element as HTMLInputElement; const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set; setter?.call(input, "1"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+  const builderRelative = page.locator('[data-filter-id="filter-1-recent-report"]'); await expect(builderRelative.getByLabel("Filter type")).toHaveValue("relativeDate"); await expect(builderRelative.getByLabel("Lock filter")).toBeChecked();
+  const builderHidden = page.locator('[data-filter-id="filter-1-business-unit"]'); await expect(builderHidden.getByLabel("Filter type")).toHaveValue("advanced"); await expect(builderHidden.getByLabel("Hide filter")).toBeChecked();
   await page.getByRole("button", { name: "Add Gauge" }).click({ timeout: 10_000 }); await page.getByRole("button", { name: "Format" }).dispatchEvent("click");
   await expect(page.getByText("Format visual")).toBeVisible(); await expect(page.getByText("Show title")).toBeVisible();
   const builderViewport = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
   expect(builderViewport.scrollWidth).toBeLessThanOrEqual(builderViewport.clientWidth + 1);
-  const savedReport = page.waitForResponse((response) => response.url().includes("/api/reports/report-1") && response.request().method() === "PUT", { timeout: 20_000 }); await page.getByRole("button", { name: "Save draft" }).dispatchEvent("click"); expect((await savedReport).ok()).toBe(true); await expect(page.getByText("Report saved.")).toBeVisible({ timeout: 20_000 }); await page.reload(); await expect(page.getByRole("button", { name: "Move Quick views" })).toBeVisible(); await page.getByRole("button", { name: "Move Line slicer" }).dispatchEvent("click"); await page.getByRole("button", { name: "Format" }).dispatchEvent("click"); await expect(page.getByRole("button", { name: "Highlight Line slicer to Plan", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const savedReport = page.waitForResponse((response) => response.url().includes("/api/reports/report-1") && response.request().method() === "PUT", { timeout: 20_000 }); await page.getByRole("button", { name: "Save draft" }).dispatchEvent("click"); expect((await savedReport).ok()).toBe(true); await expect(page.getByText("Report saved.")).toBeVisible({ timeout: 20_000 }); await page.reload(); await expect(page.getByRole("button", { name: "Move Quick views" })).toBeVisible(); await page.getByRole("button", { name: "Move Line slicer" }).dispatchEvent("click"); await page.getByRole("button", { name: "Format" }).dispatchEvent("click"); await expect(page.getByRole("button", { name: "Highlight Line slicer to Plan", exact: true })).toHaveAttribute("aria-pressed", "true"); await page.getByRole("button", { name: "Filters", exact: true }).dispatchEvent("click"); await expect(page.locator('[data-filter-id="filter-1-top-model-context"]').getByLabel("Top N count")).toHaveValue("1");
   expect(browserErrors).toEqual([]);
 });
 
