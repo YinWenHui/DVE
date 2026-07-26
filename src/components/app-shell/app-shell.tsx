@@ -27,6 +27,7 @@ export function AppShell({ app, reports, activeReport, dataset, user, children }
   const [query, setQuery] = useState("");
   const [seconds, setSeconds] = useState(dataset.refreshIntervalMinutes * 60);
   const [refreshing, setRefreshing] = useState(false);
+  const [datasetSnapshot, setDatasetSnapshot] = useState(dataset);
   const [browserLoadedAt, setBrowserLoadedAt] = useState("");
 
   useEffect(() => {
@@ -51,10 +52,12 @@ export function AppShell({ app, reports, activeReport, dataset, user, children }
     setRefreshing(true);
     const response = await fetch(`/api/datasets/${dataset.id}/refresh`, { method: "POST" });
     if (response.ok) {
+      const payload = await response.json() as { dataset: Dataset };
+      setDatasetSnapshot(payload.dataset);
       setBrowserLoadedAt(new Date().toISOString());
       window.dispatchEvent(new Event("dve:browser-loaded"));
+      window.dispatchEvent(new CustomEvent("dve:dataset-refreshed", { detail: payload.dataset }));
       setSeconds(dataset.refreshIntervalMinutes * 60);
-      router.refresh();
     }
     setRefreshing(false);
   }
@@ -113,7 +116,7 @@ export function AppShell({ app, reports, activeReport, dataset, user, children }
           <div className="topbar-title"><span>{app.name}</span><h1>{activeReport.name}</h1></div>
           <div className="topbar-actions">
             <div className="topbar-search"><Search size={15} /><input aria-label="Search reports" placeholder="Search reports" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
-            <div className="freshness-pill"><i className="freshness-dot" /><div className="freshness-copy"><strong>{dataset.status}</strong><span>Refresh in {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</span></div></div>
+            <div className="freshness-pill"><i className="freshness-dot" /><div className="freshness-copy"><strong>{datasetSnapshot.status}</strong><span>Refresh in {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</span></div></div>
             <button className="icon-button" title="Refresh now" onClick={refresh} disabled={refreshing}><RefreshCw size={16} className={refreshing ? "spin" : ""} /></button>
             <button className="icon-button" title="Fullscreen report" onClick={fullscreen}><Fullscreen size={16} /></button>
             <button className="icon-button" title="Toggle theme" onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}><span className="theme-icon theme-icon-light"><Moon size={16} /></span><span className="theme-icon theme-icon-dark"><Sun size={16} /></span></button>

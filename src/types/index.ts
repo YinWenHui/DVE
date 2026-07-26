@@ -87,7 +87,49 @@ export interface ManufacturingRecord {
   UpdatedAt: string;
 }
 
-export type VisualType = "kpi" | "bar" | "line" | "area" | "doughnut" | "table" | "matrix" | "slicer";
+export type VisualType =
+  | "kpi"
+  | "bar"
+  | "column"
+  | "stackedBar"
+  | "stackedColumn"
+  | "line"
+  | "area"
+  | "combo"
+  | "scatter"
+  | "doughnut"
+  | "treemap"
+  | "funnel"
+  | "waterfall"
+  | "gauge"
+  | "table"
+  | "matrix"
+  | "slicer";
+
+export type ReportFilterOperator = "equals" | "notEquals" | "contains" | "greaterThanOrEqual" | "lessThanOrEqual";
+
+export interface ReportFilterDefinition {
+  id: string;
+  field: keyof ManufacturingRecord;
+  operator: ReportFilterOperator;
+  value: string | number;
+}
+
+export interface VisualDisplayOptions {
+  showTitle?: boolean;
+  showLegend?: boolean;
+  showDataLabels?: boolean;
+  showGridlines?: boolean;
+  backgroundColor?: string;
+  accentColor?: string;
+  borderRadius?: number;
+  titleAlignment?: "left" | "center" | "right";
+}
+
+export interface VisualInteractionOptions {
+  crossFilter?: boolean;
+  tooltips?: boolean;
+}
 
 export interface VisualDefinition {
   id: string;
@@ -99,14 +141,20 @@ export interface VisualDefinition {
   h: number;
   dimension?: keyof ManufacturingRecord;
   measure?: keyof ManufacturingRecord;
+  secondaryMeasure?: keyof ManufacturingRecord;
   aggregation?: Aggregation;
   format?: "number" | "percent";
+  display?: VisualDisplayOptions;
+  interaction?: VisualInteractionOptions;
+  filters?: ReportFilterDefinition[];
 }
 
 export interface ReportPage {
   id: string;
   name: string;
   ordinal: number;
+  hidden?: boolean;
+  filters?: ReportFilterDefinition[];
   visuals: VisualDefinition[];
 }
 
@@ -118,6 +166,7 @@ export interface Report {
   description: string;
   status: "draft" | "published" | "archived";
   minimumRole: RoleCode;
+  filters?: ReportFilterDefinition[];
   pages: ReportPage[];
 }
 

@@ -9,10 +9,10 @@ The repository currently contains a functional Phase 1 prototype with synthetic 
 - Application-managed, server-authorized sessions with four roles: Viewer, Supervisor, Manager, and Administrator.
 - Safe local preview authentication that is unavailable in production and does not use a default password.
 - A seeded **Digital Verse Demo** app with five navigation groups, ten reports, and audience-aware visibility.
-- Metadata-driven KPI, bar, line, area, doughnut, table, matrix, and slicer visuals using Apache ECharts and TanStack Table.
-- Shared date/line/model/customer/shift filters, chart cross-filtering, report pages, fullscreen, light/dark themes, and distinct freshness timestamps.
+- Seventeen metadata-driven visuals: KPI, bar, column, stacked bar/column, line, area, combo, scatter, doughnut, treemap, funnel, waterfall, gauge, table, matrix, and slicer.
+- Viewer filters plus persisted report/page/visual filters, chart cross-filtering, focus mode, show data, personal bookmarks, report pages, fullscreen, light/dark themes, and distinct freshness timestamps.
 - Excel/CSV upload, preview, type detection, semantic field editing, retention metadata, and a SQL Server connection test.
-- Constrained report and application builders with draggable/resizable layouts, grouped content, audience preview, draft/publish states, and validation.
+- Live-preview report and application builders with draggable/resizable layouts, data field wells, visual formatting/interactions, page duplication/hiding, grouped content, audience preview, draft/publish states, and validation.
 - Secure structured query validation; the browser cannot submit SQL or unregistered identifiers.
 - CSV and Excel exports that enforce authentication, registered visible fields, filters, and row limits.
 - Comments, structured alerts, acknowledgements, audit history, manual refresh, countdown, and refresh monitoring.
@@ -20,11 +20,11 @@ The repository currently contains a functional Phase 1 prototype with synthetic 
 
 ## Intentional Phase 1 limitations
 
-- Semantic datasets contain one table. Relationships, star schemas, reusable advanced measures, and bidirectional filters are Phase 2.
+- Semantic datasets contain one table. Relationships, star schemas, reusable advanced measures, and bidirectional filters remain a later semantic-model milestone.
 - Mock data and administrative changes are process-local and reset when the web process restarts. Mock mode exists for local preview and CI only.
 - SQL metadata migrations, connection pooling, administrator bootstrap, session creation, and versioned ETL architecture are included; full CRUD persistence adapters beyond authentication are the next SQL-mode task.
 - File imports in mock mode are held in process memory. Production imports use the Python transaction/version path.
-- No automatic PBIX, DAX, Power Query, Microsoft Graph, PDF, image, PowerPoint, scheduled email, or production-record correction support is claimed.
+- No automatic PBIX, DAX, Power Query, Microsoft Graph, PDF, image, PowerPoint, scheduled email, or production-record correction support is claimed yet.
 - The worker contains the due-schedule/locking/run-record orchestration boundary; production source-specific invocation and failure retry policy need deployment integration testing.
 
 ## Architecture
@@ -134,4 +134,4 @@ Never commit `.env`, connection strings, passwords, upload files, exports, logs,
 
 Create a focused branch, run `npm run check`, inspect staged files for secrets, commit intentionally, push, and open a draft PR. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-The phased delivery plan is in the [roadmap](docs/roadmap.md).
+The phased delivery plan is in the [roadmap](docs/roadmap.md), with the active Power BI-style front-end matrix in [front-end parity](docs/frontend-parity.md).
