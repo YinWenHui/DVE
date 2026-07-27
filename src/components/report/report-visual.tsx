@@ -121,7 +121,7 @@ export const ReportVisual = memo(function ReportVisual({ visual, rows, highlight
   const interactionMeta = supportsDrill
     ? `${fieldName} level · ${drillMode && canAdvance ? "select to drill" : onSelect ? selectedValue ? `${selectedValue} selected` : "click to interact" : "interaction off"}`
     : onSelect ? selectedValue ? `${selectedValue} selected` : "Click to interact" : "Interaction off";
-  return <ChartVisual visual={renderedVisual} rows={drilledRows} highlightRows={drilledHighlightRows} onSelect={drillMode && canAdvance || onSelect ? selectCategory : undefined} actions={actions} style={style} meta={interactionMeta} />;
+  return <ChartVisual visual={renderedVisual} rows={drilledRows} highlightRows={drilledHighlightRows} selectedValue={selectedValue} onSelect={drillMode && canAdvance || onSelect ? selectCategory : undefined} actions={actions} style={style} meta={interactionMeta} />;
 });
 
 function displayFieldName(field: keyof ManufacturingRecord | undefined) {
@@ -154,7 +154,7 @@ function VisualActions({ visual, onFocus, onShowData, onDrillthrough, drill }: {
   </div>;
 }
 
-function ChartVisual({ visual, rows, highlightRows, onSelect, actions, style, meta }: { visual: VisualDefinition; rows: ManufacturingRecord[]; highlightRows?: ManufacturingRecord[]; onSelect?: ReportVisualProps["onSelect"]; actions: React.ReactNode; style: CSSProperties; meta: string }) {
+function ChartVisual({ visual, rows, highlightRows, selectedValue, onSelect, actions, style, meta }: { visual: VisualDefinition; rows: ManufacturingRecord[]; highlightRows?: ManufacturingRecord[]; selectedValue?: string; onSelect?: ReportVisualProps["onSelect"]; actions: React.ReactNode; style: CSSProperties; meta: string }) {
   const option = useMemo(() => chartOption(visual, rows, highlightRows), [highlightRows, rows, visual]);
   const select = useCallback((value: string) => onSelect?.(visual.dimension, value), [onSelect, visual.dimension]);
   const multiples = useMemo(() => {
@@ -166,12 +166,13 @@ function ChartVisual({ visual, rows, highlightRows, onSelect, actions, style, me
       highlightRows: highlightRows?.filter((row) => String(row[visual.smallMultipleField!] ?? "Blank") === value),
     }));
   }, [highlightRows, rows, visual.smallMultipleField]);
+  const selection = selectedValue && onSelect && <button className="visual-selection-chip" type="button" aria-label={`Clear visual selection ${selectedValue}`} onClick={() => onSelect(visual.dimension, selectedValue)}><span>Filtered by <strong>{selectedValue}</strong></span><b aria-hidden>×</b></button>;
   if (visual.smallMultipleField && multiples.length) return <article className="visual-card interactive" style={style} aria-label={visual.title} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0} data-small-multiple-count={multiples.length}>
     <VisualHeader visual={visual} meta={`${displayFieldName(visual.smallMultipleField)} small multiples`} actions={actions} />
-    <div className="visual-body small-multiples-grid">{multiples.map((multiple) => <section className="small-multiple" key={multiple.value}><strong>{multiple.value}</strong><EChart option={chartOption({ ...visual, smallMultipleField: undefined }, multiple.rows, multiple.highlightRows)} onSelect={onSelect ? select : undefined} /></section>)}</div>
+    <div className="visual-body small-multiples-grid">{multiples.map((multiple) => <section className="small-multiple" key={multiple.value}><strong>{multiple.value}</strong><EChart option={chartOption({ ...visual, smallMultipleField: undefined }, multiple.rows, multiple.highlightRows)} onSelect={onSelect ? select : undefined} /></section>)}</div>{selection}
   </article>;
   return <article className="visual-card interactive" style={style} aria-label={visual.title} data-conditional-rule-count={visual.conditionalFormatting?.rules.length ?? 0}>
     <VisualHeader visual={visual} meta={meta} actions={actions} />
-    <div className="visual-body"><EChart option={option} onSelect={onSelect ? select : undefined} /></div>
+    <div className="visual-body"><EChart option={option} onSelect={onSelect ? select : undefined} /></div>{selection}
   </article>;
 }

@@ -251,7 +251,7 @@ html[data-presentation-mode="true"] .app-shell { display: block; min-width: 0; b
 .report-route-error p { max-width: 520px; margin: 0; font-size: .78rem; line-height: 1.55; }
 .report-route-error small { color: var(--muted); font-family: monospace; }
 @keyframes report-shimmer { to { transform: translateX(100%); } }
-.visual-card { height: 100%; overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 2px 8px rgba(17,30,52,.05); }
+.visual-card { position: relative; height: 100%; overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 2px 8px rgba(17,30,52,.05); }
 .visual-card.interactive { cursor: pointer; }
 .visual-card-header { display: flex; height: 39px; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--border); }
 .visual-card-header h3 { min-width: 0; flex: 1; margin: 0; overflow: hidden; font-size: .76rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
@@ -437,6 +437,9 @@ html[data-presentation-mode="true"] .app-shell { display: block; min-width: 0; b
 .offline-map-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .offline-map-legend i { width: 10px; height: 10px; border-radius: 50%; background: var(--visual-accent, #5c73e6); box-shadow: 0 0 0 4px color-mix(in srgb, var(--visual-accent, #5c73e6) 18%, transparent); }
 .map-build-settings .settings-group p { margin: 4px 0 8px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.visual-selection-chip { position: absolute; right: 10px; bottom: 8px; z-index: 3; display: inline-flex; align-items: center; gap: 8px; max-width: calc(100% - 20px); padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--visual-accent, var(--accent)) 40%, var(--border)); border-radius: 999px; background: color-mix(in srgb, var(--visual-accent, var(--accent)) 12%, var(--surface)); color: var(--text); box-shadow: 0 2px 8px rgba(27, 39, 70, .12); font-size: 10px; }
+.visual-selection-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.visual-selection-chip b { color: var(--visual-accent, var(--accent)); font-size: 13px; line-height: 1; }
 
 .admin-shell { min-height: 100vh; display: grid; grid-template-columns: 246px 1fr; background: var(--bg); }
 .admin-sidebar { position: sticky; top: 0; height: 100vh; padding: 18px 12px; background: var(--nav); color: var(--nav-text); }

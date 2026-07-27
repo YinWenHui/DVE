@@ -32,8 +32,13 @@ export function EChart({ option, onSelect }: { option: EChartsOption; onSelect?:
       window.cancelAnimationFrame(resizeFrame);
       resizeFrame = window.requestAnimationFrame(() => chart.resize({ width, height }));
     };
-    const select = (event: { name?: string | number }) => {
-      if (onSelectRef.current && (typeof event.name === "string" || typeof event.name === "number")) onSelectRef.current(String(event.name));
+    const select = (event: echarts.ECElementEvent) => {
+      const eventData = typeof event.data === "object" && event.data !== null ? event.data as { name?: string | number } : undefined;
+      const value = typeof event.name === "string" && event.name.trim() ? event.name
+        : typeof event.name === "number" ? event.name
+          : typeof eventData?.name === "string" || typeof eventData?.name === "number" ? eventData.name
+            : Array.isArray(event.value) ? event.value[0] : event.value;
+      if (onSelectRef.current && (typeof value === "string" || typeof value === "number")) onSelectRef.current(String(value));
     };
     resize();
     const resizeObserver = new ResizeObserver(resize); resizeObserver.observe(ref.current);
@@ -47,5 +52,5 @@ export function EChart({ option, onSelect }: { option: EChartsOption; onSelect?:
     chart.setOption({ animation: !reduceMotion, animationDuration: 280, animationDurationUpdate: 180, backgroundColor: "transparent", textStyle: { color: resolvedTheme === "dark" ? "#cbd5e1" : "#475569" }, ...option }, { notMerge: true, lazyUpdate: true });
   }, [option, resolvedTheme]);
 
-  return <div ref={ref} style={{ width: "100%", height: "100%" }} role="img" aria-label="Interactive report chart" />;
+  return <div ref={ref} style={{ width: "100%", height: "100%", cursor: onSelect ? "pointer" : "default" }} role="img" aria-label={onSelect ? "Interactive report chart. Select a data point to filter related visuals." : "Report chart"} data-chart-interactive={Boolean(onSelect)} />;
 }
